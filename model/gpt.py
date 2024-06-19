@@ -1,10 +1,7 @@
 import jax
 import jax.numpy as jnp
-import optax
 from chex import dataclass
 from flax import linen as nn
-
-from .nn import forward
 
 
 class FeedForwardBlock(nn.Module):
@@ -101,26 +98,13 @@ class GPT(nn.Module):
             self.decode
         )(x, pos, mask, training=training)
 
+    def gen(self, batch_size):
+        generated = jnp.empty((batch_size, self.seq_len), dtype=int)
+        next_token = jnp.empty((batch_size, 0), dtype=int)
 
-def get_optimizer(lr, weight_decay, warmup_steps, total_steps):
-    lr = optax.cosine_onecycle_schedule(total_steps, lr, warmup_steps / total_steps, div_factor=25, final_div_factor=1000)
-    return optax.adamw(lr, b1=0.9, b2=0.999, eps=1e-8, weight_decay=weight_decay)
+        for i in range(self.seq_len):
+            logits, state = self(next_token, training=False)
+            next_token = jax.random.categorical(self.make_rng('gpt'), logits[:, 0])
+            generated = generated.at[:, i].set(next_token)
 
-
-def get_cache(model, batch_size):
-    return model.init({'params': jax.random.PRNGKey(0)}, None, jnp.zeros((batch_size, model.seq_len), dtype=int))['cache']
-
-
-def generate_fn(params, state, key, batch_size, cache, model):
-    state['cache'] = cache
-
-    generated = jnp.empty((batch_size, model.seq_len, model.vocab_size), dtype=float)
-    next_token = jnp.zeros((batch_size, 0), dtype=int)
-
-    for i in range(model.seq_len):
-        key, model_key, cat_key = jax.random.split(key, 3)
-        logits, state = forward(model, params, state, model_key, next_token, False)
-        generated = generated.at[:, i].set(logits[:, 0])
-        next_token = jax.random.categorical(model_key, logits[:, 0])
-
-    return generated
+        return generated
