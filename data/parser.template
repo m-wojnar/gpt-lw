@@ -1,0 +1,23 @@
+import string
+
+import ply.lex as lex
+import ply.yacc as yacc
+
+
+tokens = list(string.ascii_lowercase)
+globals().update({f't_{token}': token for token in string.ascii_lowercase})
+
+
+def t_error(t):
+    raise SyntaxError()
+
+
+def p_error(t):
+    raise SyntaxError()
+
+
+<RULES>
+lexer = lex.lex()
+parser = yacc.yacc()
+
+verify = lambda s: parser.parse(s, lexer=lexer)
