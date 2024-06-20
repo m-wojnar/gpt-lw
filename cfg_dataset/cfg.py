@@ -51,20 +51,7 @@ class CFG:
             self.rules_dict[lhs].append(rhs)
 
     def verify(self, string: str) -> bool:
-        """
-        Verify if a string is in the language of the CFG.
-
-        Parameters
-        ----------
-        string : str
-            The string to verify.
-
-        Returns
-        -------
-        bool
-            True if the string is in the language of the CFG, False otherwise.
-        """
-
+        """Verify if a string is in the language of the CFG."""
         try:
             self.verify_fn(string)
             return True
@@ -72,37 +59,10 @@ class CFG:
             return False
 
     def sample(self) -> str:
-        """
-        Generate a random string from the language of the CFG.
-
-        Returns
-        -------
-        str
-            The generated string.
-        """
-
+        """Generate a random string from the language of the CFG."""
         def sample(lhs: str) -> str:
             if lhs not in self.rules_dict:
                 return lhs
-
             rhs = choice(self.rules_dict[lhs])
             return ''.join([sample(r) for r in rhs])
-
         return sample(self.start)
-
-    def generate_dataset(self, n_examples: int) -> list:
-        """
-        Generate a dataset of random strings from the CFG language.
-
-        Parameters
-        ----------
-        n_examples : int
-            The number of examples to generate.
-
-        Returns
-        -------
-        list
-            A list of generated strings.
-        """
-
-        return [self.sample() for _ in range(n_examples)]
