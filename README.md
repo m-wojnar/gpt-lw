@@ -35,9 +35,11 @@ The CFG class makes the following assumptions about the format of the file conta
 To use the CFG class, you need to provide the path to the file containing the CFG production rules when creating an instance of the class. Here is an example:
 
 ```python
-from data.cfg import CFG
+import random # for reproducibility
+random.seed(42)
+from cfg_dataset.cfg import CFG
 
-cfg = CFG('data/example.cfg')
+cfg = CFG('cfg_dataset/configs/simple4.cfg')
 ```
 
 Once you have an instance of the CFG class, you can use the following methods:
@@ -45,17 +47,6 @@ Once you have an instance of the CFG class, you can use the following methods:
 - `verify(string: str) -> bool`: This method verifies if a string is in the language of the CFG. It returns `True` if the string is in the language of the CFG, and `False` otherwise. **Attention! If the CFG is ambiguous, this method may return `False` even if the string is in the language of the CFG!**
 - `sample() -> str`: This method generates a random string from the language of the CFG.
 - `generate_dataset(n_examples: int) -> list`: This method generates a dataset of random strings from the CFG language. It returns a list of generated strings.
-
-### Reproducibility
-
-The CFG class uses the `random` module to generate random strings from the CFG language. To ensure reproducibility, you can set the seed of the `random` module before creating an instance of the CFG class. Here is an example:
-
-```python
-import random
-random.seed(42)
-
-cfg = CFG('data/example.cfg')
-```
 
 ### Example CFG definition
 
