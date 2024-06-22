@@ -36,9 +36,9 @@ def forward(model, variables, key, *x, method=None):
     return model.apply(variables, *x, rngs={'gpt': gpt_key, 'dropout': dropout_key}, mutable=list(set(variables) - {'params'}), method=method)
 
 
-def save_model(variables, opt_state, path):
+def save_model(variables, opt_state, step, path):
     with lz4.frame.open(path, 'wb') as f:
-        cloudpickle.dump({'variables': variables, 'opt_state': opt_state}, f)
+        cloudpickle.dump({'variables': variables, 'opt_state': opt_state, 'step': step}, f)
 
 
 def load_model(path):
@@ -46,6 +46,8 @@ def load_model(path):
         return cloudpickle.load(f)
 
 
+# NOTE: not adding any fancy logit warpers (top_k, top_p, etc) here since
+# vocab size is probably too small for it to be relevant
 def sample_model(model, variables, sample_key, batch_size, n_tokens, delim_token):
     tokens = jnp.ones((batch_size, 1), dtype=int) * delim_token
     for i in range(n_tokens):

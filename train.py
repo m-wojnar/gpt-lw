@@ -11,7 +11,7 @@ from chex import Array
 from cfg_dataset.cfg import CFG
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.loss import get_weighted_loss
-from gpt_lw.model_utils import get_optimizer, init, gradient_step, save_model, sample_model
+from gpt_lw.model_utils import get_optimizer, init, gradient_step, save_model, load_model, sample_model
 from gpt_lw.model_zdc import GPT, GPTConfig
 
 
@@ -28,6 +28,8 @@ def train(
         seed: int,
         save_freq: int,
         val_freq: int,
+        log_freq: int,
+        checkpoint_path: str = None,
         **kwargs
     ):
 
@@ -35,8 +37,13 @@ def train(
     # - auto run name if one not passed
     # - save config in dir
     # - logs (.out/.err, loss/acc curves) subdir
-    # - checkpoints subdir
-    os.makedirs(f"checkpoints/{run_name}", exist_ok=True)
+    if not os.path.exists(f"runs/{run_name}"):
+        os.makedirs(f"runs/{run_name}/checkpoints")
+    else: # autoresume
+        if checkpoint_path is None:  # manual path has top priority
+            last_path = f"runs/{run_name}/checkpoints/last.pkl"
+            if os.path.exists(last_path):
+                checkpoint_path = last_path
 
     # gen random keys
     key = jax.random.PRNGKey(seed)
@@ -49,13 +56,19 @@ def train(
     # init model
     model = GPT(config)
     inputs = jnp.empty((batch_size, config.seq_len), dtype=int)
-    variables = init(model, init_key, inputs)
+
+    if checkpoint_path:
+        print(f"Loading model from checkpoint: {checkpoint_path}")
+        ckpt = load_model(checkpoint_path)
+        variables, opt_state, init_step = ckpt['variables'], ckpt['opt_state'], ckpt['step']
+    else:
+        variables = init(model, init_key, inputs)
+        opt_state = optimizer.init(variables["params"])
+        init_step = 0
 
     n_params = sum(x.size for x in jax.tree.leaves(variables['params']))
     print(f"Model has {n_params} parameters")
 
-    # init optimizer
-    opt_state = optimizer.init(variables["params"])
 
     # gradient step and eval functions
     loss_fn = get_weighted_loss(model, loss_weighting)
@@ -65,41 +78,47 @@ def train(
     sample_fn = jax.jit(partial(sample_batch, dataset, batch_size, config.seq_len))
 
     # train loop
-    for step in range(n_steps):
+    for step in range(init_step, n_steps):
+        log_dict = {}
         train_key, batch_key = jax.random.split(train_key)
         xt, xtp1 = sample_fn(batch_key)
 
         variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
-        print("loss: ", loss)
+        log_dict["loss"] = loss
 
         if step % val_freq == 0:
-            val_key, batch_key = jax.random.split(val_key)
-            xt, xtp1 = sample_fn(batch_key)
+            val_loss = 0.0
+            n_val_steps = 10
+            for i in range(n_val_steps):  # TODO: make this a hyperparam (n_val_steps)
+                val_key, batch_key = jax.random.split(val_key)
+                xt, xtp1 = sample_fn(batch_key)
+                val_loss_t, _ = eval_fn(variables, val_key, xt, xtp1)
+                val_loss += val_loss_t
+            log_dict["val_loss"] = val_loss / n_val_steps
 
-            val_loss, _ = eval_fn(variables, val_key, xt, xtp1)
-            print("val_loss: ", val_loss)
-
+            # TODO: fix CFG classes then uncomment
             # CFG accuracy eval:
             # TODO: get delim token from cfg
-            gen_tokens = sample_model(model, variables, val_key, 2, 10, 0)
+            # gen_tokens = sample_model(model, variables, val_key, batch_size, 2 * config.seq_len, 0)
+            # gen_tokens = sample_model(model, variables, val_key, 1, config.seq_len, 0)
 
-            # TODO: benchmark and make this faster somehow...
-            tot_cfg_samples = []
-            for i in range(gen_tokens.shape[0]):
-                sample = tokenizer.decode(gen_tokens[i])
-                cfg_samples = sample.split(',')[1:-1]
-                tot_cfg_samples += cfg_samples
-            cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
-            print(cfg_acc)
+            # tot_cfg_samples = []
+            # for i in range(gen_tokens.shape[0]):
+            #     sample = tokenizer.decode(gen_tokens[i])
+            #     print(sample)
+            #     cfg_samples = sample.split(',')[1:-1]
+            #     tot_cfg_samples += cfg_samples
 
-            quit()
+            # cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
+            # log_dict["cfg_acc"] = cfg_acc
 
-        if step % save_freq == 0:
-            save_model(variables, opt_state, f"checkpoints/{run_name}/step_{step}.pkl")
-
-    # save final model
-    save_model(variables, opt_state, f"checkpoints/{run_name}/final.pkl")
-
+        if step % log_freq == 0:
+            print(f"Step {step}: {log_dict}")
+        if step % save_freq == 0 and step > 0:
+            if save_freq > 0:  # intermediate checkpoints
+                save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/step_{step}.pkl")
+            save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
+    save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
 
 if __name__ == "__main__":
     args = ArgumentParser()
