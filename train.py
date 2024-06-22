@@ -9,9 +9,9 @@ import optax
 from chex import Array
 
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
-from gpt_lw.gpt import GPT, GPTConfig
 from gpt_lw.loss import get_weighted_loss
-from gpt_lw.nn import get_optimizer, init, gradient_step, save_model
+from gpt_lw.model_utils import get_optimizer, init, gradient_step, save_model
+from gpt_lw.model_zdc import GPT, GPTConfig
 
 
 def train(

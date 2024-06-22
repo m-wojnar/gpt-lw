@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from gpt_lw.nn import forward
+from gpt_lw.model_utils import forward
 
 
 # TODO: needs benchmarking, can we make it faster?
