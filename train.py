@@ -86,16 +86,16 @@ if __name__ == "__main__":
         train_config = yaml.safe_load(f)
 
     dataset, tokenizer = get_dataset(train_config["dataset_path"])
-    vocab_size = tokenizer.vocab_size
 
     with open(args.gpt_config) as f:
         gpt_config = yaml.safe_load(f)
-        gpt_config["vocab_size"] = vocab_size
+        gpt_config["vocab_size"] = tokenizer.vocab_size
 
     gpt_config = GPTConfig(**gpt_config)
 
     with open(args.optimizer_config) as f:
         optimizer_config = yaml.safe_load(f)
+        optimizer_config["n_steps"] = train_config["n_steps"]
 
     optimizer = get_optimizer(**optimizer_config)
 
