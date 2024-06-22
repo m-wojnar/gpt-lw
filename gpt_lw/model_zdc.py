@@ -110,14 +110,3 @@ class GPT(nn.Module):
             self.config.drop_rate,
             not training
         )(x, pos, mask, training=training)
-
-    def gen(self, batch_size):
-        generated = jnp.empty((batch_size, self.seq_len), dtype=int)
-        next_token = jnp.empty((batch_size, 0), dtype=int)
-
-        for i in range(self.seq_len):
-            logits, state = self(next_token, training=False)
-            next_token = jax.random.categorical(self.make_rng('gpt'), logits[:, 0])
-            generated = generated.at[:, i].set(next_token)
-
-        return generated

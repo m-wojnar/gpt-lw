@@ -1,4 +1,5 @@
 import jax
+import jax.numpy as jnp
 import lz4.frame
 import optax
 from cloudpickle import cloudpickle
@@ -43,3 +44,13 @@ def save_model(variables, opt_state, path):
 def load_model(path):
     with lz4.frame.open(path, 'rb') as f:
         return cloudpickle.load(f)
+
+
+def sample_model(model, variables, sample_key, batch_size, n_tokens, delim_token):
+    tokens = jnp.ones((batch_size, 1), dtype=int) * delim_token
+    for i in range(n_tokens):
+        step_key = jax.random.fold_in(sample_key, i)
+        logits, _ = forward(model, variables, step_key, tokens)
+        next_token = jax.random.categorical(step_key, logits[:, 0])
+        tokens = jnp.concatenate([tokens, next_token[:, None]], axis=-1)
+    return tokens
