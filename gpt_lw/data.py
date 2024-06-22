@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+from chex import Array
 
 
 class Tokenizer:
@@ -10,17 +11,17 @@ class Tokenizer:
         self.ctoi = dict([(c, i) for i, c in enumerate(tokens)])
         self.itoc = dict([(i, c) for i, c in enumerate(tokens)])
 
-    def encode(self, text: str) -> jnp.array:
+    def encode(self, text: str) -> Array:
         t_enc = [self.ctoi[c] for c in text]
         return jnp.array(t_enc)
 
-    def decode(self, tokens: jnp.array) -> str:
+    def decode(self, tokens: Array) -> str:
         tokens = tokens.tolist()
         chars = [self.itoc[t] for t in tokens]
         return "".join(chars)
 
 
-def get_dataset(txt_path: str) -> jnp.array:
+def get_dataset(txt_path: str) -> Array:
     with open(txt_path, "r") as f:
         data = f.read()
     tokens = sorted(list(set(data)))
@@ -33,4 +34,4 @@ def sample_batch(input_tensor, batch_size, seq_len, key):
     N = input_tensor.shape[0]
     indices = jax.random.randint(key, (batch_size,), minval=0, maxval=N - seq_len + 1)
     batch = jnp.array([input_tensor[i:i + seq_len] for i in indices])
-    return batch
+    return batch[:, :-1], batch[:, 1:]

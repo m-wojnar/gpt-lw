@@ -1,8 +1,9 @@
-import optax
+import jax
 import jax.numpy as jnp
-from jax import lax
-from optax import losses
-from flax import linen as nn
+import optax
+
+from gpt_lw.nn import forward
+
 
 # TODO: needs benchmarking, can we make it faster?
 def compute_relative_positions(tokens, delim_token):
@@ -20,13 +21,13 @@ def compute_relative_positions(tokens, delim_token):
         carry = jnp.maximum(carry, x)
         return carry, carry
 
-    last_pos = lax.scan(cumulative_max_scan, relative_positions[:, 0], relative_positions.T)[1].T
+    last_pos = jax.lax.scan(cumulative_max_scan, relative_positions[:, 0], relative_positions.T)[1].T
     # Compute relative positions
     relative_positions = positions - last_pos
     return relative_positions
 
 
-def get_weighted_loss(state, weighting):
+def get_weighted_loss(model, weighting):
     if weighting == "unweighted":
         def unweighted(x):
             return 1.0
@@ -38,12 +39,12 @@ def get_weighted_loss(state, weighting):
             return weights
         weight_fn = negexp_relpos
 
-    def weighted_nt(params, xt, xtp1):
-        logits = state.apply_fn({'params': params}, xt)
-        token_loss = losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
+    def weighted_nt(variables, key, xt, xtp1):
+        logits, state = forward(model, variables, key, xt)
+        token_loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
         weights = weight_fn(xt)
 
         weighted_loss = token_loss * weights
-        return weighted_loss.mean()
+        return weighted_loss.mean(), state
 
     return weighted_nt
