@@ -33,5 +33,5 @@ def get_dataset(txt_path: str) -> tuple[Array, Tokenizer]:
 def sample_batch(input_tensor: Array, batch_size: int, seq_len: int, key: PRNGKey) -> tuple[Array, Array]:
     N = input_tensor.shape[0]
     indices = jax.random.randint(key, (batch_size,), minval=0, maxval=N - seq_len + 1)
-    batch = jnp.array([input_tensor[i:i + seq_len] for i in indices])
+    batch = jax.vmap(lambda i: jax.lax.dynamic_slice(input_tensor, (i,), (seq_len,)))(indices)
     return batch[:, :-1], batch[:, 1:]

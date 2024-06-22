@@ -51,18 +51,19 @@ def train(
     loss_fn = get_weighted_loss(model, loss_weighting)
     step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
     eval_fn = jax.jit(loss_fn)
+    sample_fn = jax.jit(partial(sample_batch, dataset, batch_size, config.seq_len))
 
     # train loop
     for step in range(n_steps):
         train_key, batch_key = jax.random.split(train_key)
-        xt, xtp1 = sample_batch(dataset, batch_size, config.seq_len, batch_key)
+        xt, xtp1 = sample_fn(batch_key)
 
         variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
         print("loss: ", loss)
 
         if step % val_freq == 0:
             val_key, batch_key = jax.random.split(val_key)
-            xt, xtp1 = sample_batch(dataset, batch_size, config.seq_len, batch_key)
+            xt, xtp1 = sample_fn(batch_key)
 
             val_loss, _ = eval_fn(variables, val_key, xt, xtp1)
             print("val_loss: ", val_loss)
