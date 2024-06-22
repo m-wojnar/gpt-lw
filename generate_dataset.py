@@ -10,7 +10,7 @@ if __name__ == "__main__":
     dataset_name = f"{cfg_name}_{n_train_samples}"
     log_stats = True
 
-    cfg = CFG(rules_file=f"cfg_dataset/configs/{cfg_name}.cfg")
+    cfg = CFG(rules_file=f"configs/cfg/{cfg_name}.cfg")
 
     print(f"Generating dataset for CFG {cfg_name} with {n_train_samples} samples...")
     samples = [cfg.sample() for _ in tqdm(range(n_train_samples))]
