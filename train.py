@@ -25,7 +25,8 @@ def train(
         loss_weighting: str,
         seed: int,
         save_freq: int,
-        val_freq: int
+        val_freq: int,
+        **kwargs
     ):
 
     os.makedirs(f"checkpoints/{run_name}", exist_ok=True)
@@ -75,17 +76,27 @@ def train(
 
 if __name__ == "__main__":
     args = ArgumentParser()
-    args.add_argument("--config_path", type=str, default="configs/base.yaml")
-    args.add_argument("--dataset_path", type=str, default="cfg_dataset/simple4_100000.txt")
+    args.add_argument("--gpt_config", type=str, default="configs/gpt/base.yaml")
+    args.add_argument("--optimizer_config", type=str, default="configs/optimizer/base.yaml")
+    args.add_argument("--train_config", type=str, default="configs/train/base.yaml")
     args.add_argument("--run_name", type=str, default="base")
     args = args.parse_args()
 
-    with open(args.config_path) as f:
-        config = yaml.safe_load(f)
+    with open(args.train_config) as f:
+        train_config = yaml.safe_load(f)
 
-    dataset, tokenizer = get_dataset(args.dataset_path)
-    gpt_config = GPTConfig(**config["gpt_config"])
-    optimizer = get_optimizer(**config["optimizer_config"])
-    train_config = config["train_config"]
+    dataset, tokenizer = get_dataset(train_config["dataset_path"])
+    vocab_size = tokenizer.vocab_size
+
+    with open(args.gpt_config) as f:
+        gpt_config = yaml.safe_load(f)
+        gpt_config["vocab_size"] = vocab_size
+
+    gpt_config = GPTConfig(**gpt_config)
+
+    with open(args.optimizer_config) as f:
+        optimizer_config = yaml.safe_load(f)
+
+    optimizer = get_optimizer(**optimizer_config)
 
     train(args.run_name, gpt_config, dataset, tokenizer, optimizer, **train_config)

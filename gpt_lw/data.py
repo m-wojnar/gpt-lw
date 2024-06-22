@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from chex import Array
+from chex import Array, PRNGKey
 
 
 class Tokenizer:
@@ -21,7 +21,7 @@ class Tokenizer:
         return "".join(chars)
 
 
-def get_dataset(txt_path: str) -> Array:
+def get_dataset(txt_path: str) -> tuple[Array, Tokenizer]:
     with open(txt_path, "r") as f:
         data = f.read()
     tokens = sorted(list(set(data)))
@@ -30,7 +30,7 @@ def get_dataset(txt_path: str) -> Array:
     return data_e, tokenizer
 
 
-def sample_batch(input_tensor, batch_size, seq_len, key):
+def sample_batch(input_tensor: Array, batch_size: int, seq_len: int, key: PRNGKey) -> tuple[Array, Array]:
     N = input_tensor.shape[0]
     indices = jax.random.randint(key, (batch_size,), minval=0, maxval=N - seq_len + 1)
     batch = jnp.array([input_tensor[i:i + seq_len] for i in indices])
