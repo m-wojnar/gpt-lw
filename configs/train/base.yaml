@@ -2,8 +2,9 @@ cfg_name: "simple4"
 dataset_path: "cfg_dataset/simple4_100000_train.txt"
 batch_size: 4
 loss_weighting: "negexp_relpos"
-n_steps: 10000
+n_steps: 1000
 seed: 42
 save_freq: -1
-val_freq: 1000
+val_freq: 100
+n_val_steps: 10
 log_freq: 100

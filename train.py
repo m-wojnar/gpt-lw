@@ -28,6 +28,7 @@ def train(
         seed: int,
         save_freq: int,
         val_freq: int,
+        n_val_steps: int,
         log_freq: int,
         checkpoint_path: str = None,
         **kwargs
@@ -66,6 +67,10 @@ def train(
         opt_state = optimizer.init(variables["params"])
         init_step = 0
 
+    if init_step == n_steps:
+        print("Model already trained for n_steps!")
+        return
+
     n_params = sum(x.size for x in jax.tree.leaves(variables['params']))
     print(f"Model has {n_params} parameters")
 
@@ -87,14 +92,16 @@ def train(
         log_dict["loss"] = loss
 
         if step % val_freq == 0:
-            val_loss = 0.0
-            n_val_steps = 10
+            val_loss, val_cce = 0.0, 0.0
             for i in range(n_val_steps):  # TODO: make this a hyperparam (n_val_steps)
                 val_key, batch_key = jax.random.split(val_key)
                 xt, xtp1 = sample_fn(batch_key)
-                val_loss_t, _ = eval_fn(variables, val_key, xt, xtp1)
+                val_loss_t, _ = loss_fn(variables, val_key, xt, xtp1)
+                val_cce_t, _ = eval_fn(variables, val_key, xt, xtp1)
                 val_loss += val_loss_t
+                val_cce += val_cce_t
             log_dict["val_loss"] = val_loss / n_val_steps
+            log_dict["val_cce"] = val_cce / n_val_steps
 
             # TODO: fix CFG classes then uncomment
             # CFG accuracy eval:
