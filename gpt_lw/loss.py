@@ -5,7 +5,6 @@ import optax
 from gpt_lw.model_utils import forward
 
 
-# TODO: needs benchmarking, can we make it faster?
 def compute_relative_positions(tokens, delim_token):
     batch_size, seq_len = tokens.shape
     relative_positions = jnp.full_like(tokens, fill_value=-seq_len)

@@ -8,3 +8,4 @@ optax~=0.2.2
 ply~=3.11
 PyYAML~=6.0.1
 tqdm~=4.66.2
+wandb~=0.17.2

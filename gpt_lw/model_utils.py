@@ -1,4 +1,5 @@
 import jax
+import jax.numpy as jnp
 import lz4.frame
 import optax
 from cloudpickle import cloudpickle
@@ -30,16 +31,23 @@ def init(model, key, *x, print_summary=False):
     return variables
 
 
+def init_cache(model, *x):
+    variables = model.init({'params': jax.random.PRNGKey(0)}, *x)
+    return variables['cache']
+
+
 def forward(model, variables, key, *x, method=None):
     gpt_key, dropout_key = jax.random.split(key)
     return model.apply(variables, *x, rngs={'gpt': gpt_key, 'dropout': dropout_key}, mutable=list(set(variables) - {'params'}), method=method)
 
 
-def save_model(variables, opt_state, path):
+def save_model(variables, opt_state, step, path):
     with lz4.frame.open(path, 'wb') as f:
-        cloudpickle.dump({'variables': variables, 'opt_state': opt_state}, f)
+        cloudpickle.dump({'variables': variables, 'opt_state': opt_state, 'step': step}, f)
 
 
 def load_model(path):
     with lz4.frame.open(path, 'rb') as f:
-        return cloudpickle.load(f)
+        ckpt = cloudpickle.load(f)
+    variables, opt_state, init_step = ckpt['variables'], ckpt['opt_state'], ckpt['step']
+    return variables, opt_state, init_step
