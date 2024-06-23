@@ -32,7 +32,7 @@ def init(model, key, *x, print_summary=False):
 
 
 def init_cache(model, *x):
-    variables = model.init({'params': jax.random.PRNGKey(0)}, *x)
+    variables = model.init({'params': jax.random.PRNGKey(0)}, *x, training=False)
     return variables['cache']
 
 

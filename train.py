@@ -62,9 +62,8 @@ def train(
 
     # init model
     model = GPT(config)
-    model_gen = GPT(config, decode=True, gen_batch_size=batch_size, delim_token=0)
     inputs = jnp.empty((batch_size, config.seq_len), dtype=int)
-    cache = init_cache(model_gen, inputs)
+    cache = init_cache(model, inputs)
 
     if checkpoint_path:
         print(f"Loading model from checkpoint: {checkpoint_path}")
@@ -88,7 +87,7 @@ def train(
     step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
     eval_fn = jax.jit(eval_fn)
     sample_fn = jax.jit(partial(sample_batch, dataset, batch_size, config.seq_len))
-    gen_fn = jax.jit(lambda variables, key: forward(model_gen, variables | {'cache': cache}, key, method="gen")[0])
+    gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
 
     # train loop
     for step in range(init_step, n_steps):
@@ -113,7 +112,6 @@ def train(
 
             # TODO: fix CFG classes then uncomment
             # CFG accuracy eval:
-            # TODO: get delim token from cfg
             gen_tokens = gen_fn(variables, val_key)
             tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
             print(tot_cfg_samples)
@@ -151,6 +149,9 @@ if __name__ == "__main__":
 
     with open(args.gpt_config) as f:
         gpt_config = yaml.safe_load(f)
+        gpt_config["gen_batch_size"] = train_config["gen_batch_size"]
+        # TODO: get delim token from the CFG class
+        gpt_config["delim_token"] = 0
         gpt_config["vocab_size"] = tokenizer.vocab_size
 
     gpt_config = GPTConfig(**gpt_config)
