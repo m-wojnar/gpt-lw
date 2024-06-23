@@ -118,8 +118,8 @@ def train(
             tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
             print(tot_cfg_samples)
 
-            # cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
-            # log_dict["val/cfg_acc"] = cfg_acc
+            cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
+            log_dict["val/cfg_acc"] = cfg_acc
 
         if step % log_freq == 0:
             if logging == "wandb":
