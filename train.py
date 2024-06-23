@@ -1,5 +1,6 @@
 import os
 import yaml
+import wandb
 from argparse import ArgumentParser
 from functools import partial
 
@@ -27,9 +28,11 @@ def train(
         loss_weighting: str,
         seed: int,
         save_freq: int,
+        save_intermediate: bool,
         val_freq: int,
         n_val_steps: int,
         log_freq: int,
+        logging: str,  # options = ['stdout', 'wandb']
         checkpoint_path: str = None,
         **kwargs
     ):
@@ -46,6 +49,9 @@ def train(
             if os.path.exists(last_path):
                 checkpoint_path = last_path
 
+    if logging == "wandb":
+        wandb.init(project="gpt-lw", dir=f"runs/{run_name}", name=run_name)
+
     # gen random keys
     key = jax.random.PRNGKey(seed)
     init_key, train_key, val_key = jax.random.split(key, 3)
@@ -60,8 +66,7 @@ def train(
 
     if checkpoint_path:
         print(f"Loading model from checkpoint: {checkpoint_path}")
-        ckpt = load_model(checkpoint_path)
-        variables, opt_state, init_step = ckpt['variables'], ckpt['opt_state'], ckpt['step']
+        variables, opt_state, init_step = load_model(checkpoint_path)
     else:
         variables = init(model, init_key, inputs)
         opt_state = optimizer.init(variables["params"])
@@ -84,12 +89,12 @@ def train(
 
     # train loop
     for step in range(init_step, n_steps):
-        log_dict = {}
+        log_dict = {'step': step, 'tokens': step * batch_size * config.seq_len}
         train_key, batch_key = jax.random.split(train_key)
         xt, xtp1 = sample_fn(batch_key)
 
         variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
-        log_dict["loss"] = loss
+        log_dict["train/loss"] = loss.item()
 
         if step % val_freq == 0:
             val_loss, val_cce = 0.0, 0.0
@@ -100,8 +105,8 @@ def train(
                 val_cce_t, _ = eval_fn(variables, val_key, xt, xtp1)
                 val_loss += val_loss_t
                 val_cce += val_cce_t
-            log_dict["val_loss"] = val_loss / n_val_steps
-            log_dict["val_cce"] = val_cce / n_val_steps
+            log_dict["val/loss"] = val_loss / n_val_steps
+            log_dict["val/cce"] = val_cce / n_val_steps
 
             # TODO: fix CFG classes then uncomment
             # CFG accuracy eval:
@@ -117,12 +122,15 @@ def train(
             #     tot_cfg_samples += cfg_samples
 
             # cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
-            # log_dict["cfg_acc"] = cfg_acc
+            # log_dict["val/cfg_acc"] = cfg_acc
 
         if step % log_freq == 0:
-            print(f"Step {step}: {log_dict}")
+            if logging == "wandb":
+                wandb.log(log_dict)
+            elif logging == "stdout":
+                print(f"Step {step}: {log_dict}")
         if step % save_freq == 0 and step > 0:
-            if save_freq > 0:  # intermediate checkpoints
+            if save_intermediate:
                 save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/step_{step}.pkl")
             save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
     save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint

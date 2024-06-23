@@ -43,7 +43,9 @@ def save_model(variables, opt_state, step, path):
 
 def load_model(path):
     with lz4.frame.open(path, 'rb') as f:
-        return cloudpickle.load(f)
+        ckpt = cloudpickle.load(f)
+    variables, opt_state, init_step = ckpt['variables'], ckpt['opt_state'], ckpt['step']
+    return variables, opt_state, init_step
 
 
 # NOTE: not adding any fancy logit warpers (top_k, top_p, etc) here since
