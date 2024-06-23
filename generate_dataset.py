@@ -1,4 +1,5 @@
 from tqdm import tqdm
+
 from cfg_dataset.cfg import CFG
 
 
@@ -13,7 +14,7 @@ if __name__ == "__main__":
     cfg = CFG(rules_file=f"configs/cfg/{cfg_name}.cfg")
 
     print(f"Generating dataset for CFG {cfg_name} with {n_train_samples} samples...")
-    samples = [cfg.sample() for _ in tqdm(range(n_train_samples))]
+    samples = cfg.sample_rand(n=n_train_samples)
 
     unique_samples = list(set(samples))
     print(f"Number of unique samples: {len(unique_samples)}")
