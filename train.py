@@ -12,7 +12,7 @@ from chex import Array
 from cfg_dataset.cfg import CFG
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.loss import get_weighted_loss
-from gpt_lw.model_utils import get_optimizer, init, gradient_step, save_model, load_model, sample_model
+from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_model, load_model, forward
 from gpt_lw.model_zdc import GPT, GPTConfig
 
 
@@ -62,7 +62,9 @@ def train(
 
     # init model
     model = GPT(config)
+    model_gen = GPT(config, decode=True, gen_batch_size=batch_size, delim_token=0)
     inputs = jnp.empty((batch_size, config.seq_len), dtype=int)
+    cache = init_cache(model_gen, inputs)
 
     if checkpoint_path:
         print(f"Loading model from checkpoint: {checkpoint_path}")
@@ -79,13 +81,14 @@ def train(
     n_params = sum(x.size for x in jax.tree.leaves(variables['params']))
     print(f"Model has {n_params} parameters")
 
-
-    # gradient step and eval functions
+    # compiled functions
     loss_fn = get_weighted_loss(model, loss_weighting)
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
+
     step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
     eval_fn = jax.jit(eval_fn)
     sample_fn = jax.jit(partial(sample_batch, dataset, batch_size, config.seq_len))
+    gen_fn = jax.jit(lambda variables, key: forward(model_gen, variables | {'cache': cache}, key, method="gen")[0])
 
     # train loop
     for step in range(init_step, n_steps):
@@ -111,15 +114,9 @@ def train(
             # TODO: fix CFG classes then uncomment
             # CFG accuracy eval:
             # TODO: get delim token from cfg
-            # gen_tokens = sample_model(model, variables, val_key, batch_size, 2 * config.seq_len, 0)
-            # gen_tokens = sample_model(model, variables, val_key, 1, config.seq_len, 0)
-
-            # tot_cfg_samples = []
-            # for i in range(gen_tokens.shape[0]):
-            #     sample = tokenizer.decode(gen_tokens[i])
-            #     print(sample)
-            #     cfg_samples = sample.split(',')[1:-1]
-            #     tot_cfg_samples += cfg_samples
+            gen_tokens = gen_fn(variables, val_key)
+            tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
+            print(tot_cfg_samples)
 
             # cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
             # log_dict["val/cfg_acc"] = cfg_acc
@@ -129,11 +126,14 @@ def train(
                 wandb.log(log_dict)
             elif logging == "stdout":
                 print(f"Step {step}: {log_dict}")
+
         if step % save_freq == 0 and step > 0:
             if save_intermediate:
                 save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/step_{step}.pkl")
             save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
+
     save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
+
 
 if __name__ == "__main__":
     args = ArgumentParser()

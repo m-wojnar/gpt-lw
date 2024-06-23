@@ -81,10 +81,13 @@ class Transformer(nn.Module):
 
 class GPT(nn.Module):
     config: dataclass
+    decode: bool = False
+    gen_batch_size: int = 1
+    delim_token: int = 0
 
     @nn.compact
-    def __call__(self, x, training=True):
-        if not training:
+    def __call__(self, x):
+        if self.decode:
             is_initialized = self.has_variable('cache', 'cache_index')
             cache_index = self.variable('cache', 'cache_index', lambda: jnp.array(0, dtype=int))
 
@@ -108,5 +111,21 @@ class GPT(nn.Module):
             self.config.num_heads,
             self.config.num_layers,
             self.config.drop_rate,
-            not training
-        )(x, pos, mask, training=training)
+            self.decode
+        )(x, pos, mask, training=not self.decode)
+
+    # NOTE: not adding any fancy logit wrappers (top_k, top_p, etc.) here since
+    # vocab size is probably too small for it to be relevant
+    def gen(self):
+        def scan_fn(gpt, carry):
+            prev_token, key = carry
+            key, cat_key = jax.random.split(key)
+
+            logits = gpt(prev_token)
+            next_token = jax.random.categorical(cat_key, logits)
+            return (next_token, key), next_token
+
+        scan = nn.scan(scan_fn, variable_broadcast='params', variable_carry='cache', out_axes=1, length=self.config.seq_len)
+        first_token = jnp.ones((self.gen_batch_size, 1), dtype=int) * self.delim_token
+        _, generated = scan(self, (first_token, self.make_rng('gpt')))
+        return generated.squeeze()

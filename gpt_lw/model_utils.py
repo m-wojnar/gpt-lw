@@ -31,6 +31,11 @@ def init(model, key, *x, print_summary=False):
     return variables
 
 
+def init_cache(model, *x):
+    variables = model.init({'params': jax.random.PRNGKey(0)}, *x)
+    return variables['cache']
+
+
 def forward(model, variables, key, *x, method=None):
     gpt_key, dropout_key = jax.random.split(key)
     return model.apply(variables, *x, rngs={'gpt': gpt_key, 'dropout': dropout_key}, mutable=list(set(variables) - {'params'}), method=method)
@@ -46,15 +51,3 @@ def load_model(path):
         ckpt = cloudpickle.load(f)
     variables, opt_state, init_step = ckpt['variables'], ckpt['opt_state'], ckpt['step']
     return variables, opt_state, init_step
-
-
-# NOTE: not adding any fancy logit warpers (top_k, top_p, etc) here since
-# vocab size is probably too small for it to be relevant
-def sample_model(model, variables, sample_key, batch_size, n_tokens, delim_token):
-    tokens = jnp.ones((batch_size, 1), dtype=int) * delim_token
-    for i in range(n_tokens):
-        step_key = jax.random.fold_in(sample_key, i)
-        logits, _ = forward(model, variables, step_key, tokens)
-        next_token = jax.random.categorical(step_key, logits[:, 0])
-        tokens = jnp.concatenate([tokens, next_token[:, None]], axis=-1)
-    return tokens
