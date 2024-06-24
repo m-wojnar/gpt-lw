@@ -10,7 +10,7 @@ def get_optimizer(lr, b1, b2, eps, cosine_schedule, weight_decay, warmup_pct, n_
     else:
         lr = optax.constant_schedule(lr)
 
-    return optax.adamw(lr, b1, b2, eps, weight_decay=weight_decay)
+    return optax.adamw(lr, b1, b2, eps, weight_decay=weight_decay), lr
 
 
 def gradient_step(variables, loss_params, opt_state, optimizer, loss_fn):

@@ -2,12 +2,13 @@ import random
 
 from cfg_dataset.cfg import CFG
 
+DELIM_TOKEN = ","
+
 
 if __name__ == "__main__":
     cfg_name = "simple4"
     n_train_samples = 100000
     n_val_samples = 1000
-    delim_token = ","
     dataset_name = f"{cfg_name}_{n_train_samples}"
     log_stats = True
 
@@ -25,8 +26,8 @@ if __name__ == "__main__":
     print(f"Number of train samples: {len(train_samples)}")
     print(f"Number of val samples: {len(val_samples)}")
 
-    train_dataset_str = "," + delim_token.join(train_samples) + ","
-    val_dataset_str = "," + delim_token.join(val_samples) + ","
+    train_dataset_str = DELIM_TOKEN + DELIM_TOKEN.join(train_samples) + DELIM_TOKEN
+    val_dataset_str = DELIM_TOKEN + DELIM_TOKEN.join(val_samples) + DELIM_TOKEN
 
     if log_stats:
         avg_len = sum([len(s) for s in train_samples]) / len(train_samples)
