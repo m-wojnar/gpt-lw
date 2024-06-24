@@ -1,0 +1,6 @@
+seq_len: 64
+embed_dim: 16
+ff_dim: 32
+num_heads: 4
+num_layers: 4
+drop_rate: 0.0
