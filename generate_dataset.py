@@ -1,4 +1,4 @@
-from tqdm import tqdm
+import random
 
 from cfg_dataset.cfg import CFG
 
@@ -11,6 +11,7 @@ if __name__ == "__main__":
     dataset_name = f"{cfg_name}_{n_train_samples}"
     log_stats = True
 
+    random.seed(42)
     cfg = CFG(rules_file=f"configs/cfg/{cfg_name}.cfg")
 
     print(f"Generating dataset for CFG {cfg_name} with {n_train_samples} samples...")
