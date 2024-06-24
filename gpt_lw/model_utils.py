@@ -1,13 +1,16 @@
 import jax
-import jax.numpy as jnp
 import lz4.frame
 import optax
 from cloudpickle import cloudpickle
 
 
-def get_optimizer(lr, weight_decay, warmup_pct, n_steps):
-    lr = optax.cosine_onecycle_schedule(n_steps, lr, warmup_pct, div_factor=25, final_div_factor=1000)
-    return optax.adamw(lr, b1=0.9, b2=0.999, eps=1e-8, weight_decay=weight_decay)
+def get_optimizer(lr, b1, b2, eps, cosine_schedule, weight_decay, warmup_pct, n_steps, div_factor, final_div_factor):
+    if cosine_schedule:
+        lr = optax.cosine_onecycle_schedule(n_steps, lr, warmup_pct, div_factor, final_div_factor)
+    else:
+        lr = optax.constant_schedule(lr)
+
+    return optax.adamw(lr, b1, b2, eps, weight_decay=weight_decay)
 
 
 def gradient_step(variables, loss_params, opt_state, optimizer, loss_fn):

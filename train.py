@@ -58,7 +58,7 @@ def train(
 
     # check device
     device = jax.devices()[0].platform
-    print("Device: ", device)
+    print(f"Device: {device}")
 
     # init model
     model = GPT(config)
@@ -114,7 +114,6 @@ def train(
             # CFG accuracy eval:
             gen_tokens = gen_fn(variables, val_key)
             tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
-            print(tot_cfg_samples)
 
             cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
             log_dict["val/cfg_acc"] = cfg_acc
@@ -123,7 +122,7 @@ def train(
             if logging == "wandb":
                 wandb.log(log_dict)
             elif logging == "stdout":
-                print(f"Step {step}: {log_dict}")
+                print(log_dict)
 
         if step % save_freq == 0 and step > 0:
             if save_intermediate:
