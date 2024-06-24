@@ -21,7 +21,8 @@ from gpt_lw.model_zdc import GPT, GPTConfig
 def train(
         run_name: str,
         config: GPTConfig,
-        dataset: Array,
+        train_dataset: Array,
+        val_dataset: Array,
         cfg: CFG,
         tokenizer: Tokenizer,
         optimizer: optax.GradientTransformation,
@@ -89,14 +90,15 @@ def train(
 
     step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
     eval_fn = jax.jit(eval_fn)
-    sample_fn = jax.jit(partial(sample_batch, dataset, batch_size, config.seq_len))
+    train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len))
+    val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len))
     gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
 
     # train loop
     for step in range(init_step, n_steps):
         log_dict = {'step': step, 'tokens': step * batch_size * config.seq_len}
         train_key, batch_key = jax.random.split(train_key)
-        xt, xtp1 = sample_fn(batch_key)
+        xt, xtp1 = train_sample_fn(batch_key)
 
         variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
 
@@ -108,7 +110,7 @@ def train(
 
             for i in range(n_val_steps):
                 val_key, batch_key = jax.random.split(val_key)
-                xt, xtp1 = sample_fn(batch_key)
+                xt, xtp1 = val_sample_fn(batch_key)
                 val_loss_t, _ = loss_fn(variables, val_key, xt, xtp1)
                 val_cce_t, _ = eval_fn(variables, val_key, xt, xtp1)
                 val_loss += val_loss_t.item()
@@ -150,7 +152,8 @@ if __name__ == "__main__":
         train_config = yaml.safe_load(f)
 
     cfg = CFG(rules_file=f"configs/cfg/{train_config['cfg_name']}.cfg")
-    dataset, tokenizer = get_dataset(train_config["dataset_path"])
+    train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"])
+    val_dataset, _ = get_dataset(train_config["val_dataset_path"])
 
     with open(args.gpt_config) as f:
         gpt_config = yaml.safe_load(f)
@@ -166,4 +169,4 @@ if __name__ == "__main__":
 
     optimizer, schedule = get_optimizer(**optimizer_config)
 
-    train(args.run_name, gpt_config, dataset, cfg, tokenizer, optimizer, schedule, **train_config)
+    train(args.run_name, gpt_config, train_dataset, val_dataset, cfg, tokenizer, optimizer, schedule, **train_config)
