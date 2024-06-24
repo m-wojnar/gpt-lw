@@ -27,9 +27,9 @@ def train(
         tokenizer: Tokenizer,
         optimizer: optax.GradientTransformation,
         schedule: optax.Schedule,
+        loss_weighting: str,
         batch_size: int,
         n_steps: int,
-        loss_weighting: str,
         seed: int,
         save_freq: int,
         save_intermediate: bool,
@@ -146,6 +146,7 @@ if __name__ == "__main__":
     args.add_argument("--optimizer_config", type=str, default="configs/optimizer/debug.yaml")
     args.add_argument("--train_config", type=str, default="configs/train/debug.yaml")
     args.add_argument("--run_name", type=str, default="debug")
+    args.add_argument("--loss_weighting", type=str, default="unweighted")
     args = args.parse_args()
 
     with open(args.train_config) as f:
@@ -169,4 +170,5 @@ if __name__ == "__main__":
 
     optimizer, schedule = get_optimizer(**optimizer_config)
 
-    train(args.run_name, gpt_config, train_dataset, val_dataset, cfg, tokenizer, optimizer, schedule, **train_config)
+    run_name = f"{args.run_name}_{args.loss_weighting}"
+    train(run_name, gpt_config, train_dataset, val_dataset, cfg, tokenizer, optimizer, schedule, args.loss_weighting, **train_config)
