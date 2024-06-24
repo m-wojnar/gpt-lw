@@ -134,10 +134,10 @@ def train(
 
 if __name__ == "__main__":
     args = ArgumentParser()
-    args.add_argument("--gpt_config", type=str, default="configs/gpt/base.yaml")
-    args.add_argument("--optimizer_config", type=str, default="configs/optimizer/base.yaml")
-    args.add_argument("--train_config", type=str, default="configs/train/base.yaml")
-    args.add_argument("--run_name", type=str, default="base")
+    args.add_argument("--gpt_config", type=str, default="configs/gpt/debug.yaml")
+    args.add_argument("--optimizer_config", type=str, default="configs/optimizer/debug.yaml")
+    args.add_argument("--train_config", type=str, default="configs/train/debug.yaml")
+    args.add_argument("--run_name", type=str, default="debug")
     args = args.parse_args()
 
     with open(args.train_config) as f:

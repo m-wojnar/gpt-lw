@@ -4,10 +4,10 @@ import optax
 from cloudpickle import cloudpickle
 
 
-def get_optimizer(lr, b1, b2, eps, cosine_schedule, weight_decay, warmup_pct, n_steps, div_factor, final_div_factor):
-    if cosine_schedule:
+def get_optimizer(lr, b1, b2, eps, weight_decay, warmup_pct, n_steps, div_factor, final_div_factor, lr_schedule="constant"):
+    if lr_schedule == "cosine":
         lr = optax.cosine_onecycle_schedule(n_steps, lr, warmup_pct, div_factor, final_div_factor)
-    else:
+    elif lr_schedule == "constant":
         lr = optax.constant_schedule(lr)
 
     return optax.adamw(lr, b1, b2, eps, weight_decay=weight_decay)
