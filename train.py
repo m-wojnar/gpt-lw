@@ -1,15 +1,17 @@
 import os
-import yaml
-import wandb
 from argparse import ArgumentParser
 from functools import partial
+from typing import Literal
 
 import jax
 import jax.numpy as jnp
 import optax
+import wandb
+import yaml
 from chex import Array
 
 from cfg_dataset.cfg import CFG
+from generate_dataset import DELIM_TOKEN
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.loss import get_weighted_loss
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_model, load_model, forward
@@ -23,6 +25,7 @@ def train(
         cfg: CFG,
         tokenizer: Tokenizer,
         optimizer: optax.GradientTransformation,
+        schedule: optax.Schedule,
         batch_size: int,
         n_steps: int,
         loss_weighting: str,
@@ -32,7 +35,7 @@ def train(
         val_freq: int,
         n_val_steps: int,
         log_freq: int,
-        logging: str,  # options = ['stdout', 'wandb']
+        logging: Literal["wandb", "stdout"],
         checkpoint_path: str = None,
         **kwargs
     ):
@@ -50,7 +53,7 @@ def train(
                 checkpoint_path = last_path
 
     if logging == "wandb":
-        wandb.init(project="gpt-lw", dir=f"runs/{run_name}", name=run_name)
+        wandb.init(project="gpt-lw", entity="gpt-lw", dir=f"runs/{run_name}", name=run_name)
 
     # gen random keys
     key = jax.random.PRNGKey(seed)
