@@ -96,21 +96,24 @@ def train(
         xt, xtp1 = sample_fn(batch_key)
 
         variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
+
         log_dict["train/loss"] = loss.item()
+        log_dict["train/lr"] = schedule(opt_state[-1].count)
 
         if step % val_freq == 0:
             val_loss, val_cce = 0.0, 0.0
-            for i in range(n_val_steps):  # TODO: make this a hyperparam (n_val_steps)
+
+            for i in range(n_val_steps):
                 val_key, batch_key = jax.random.split(val_key)
                 xt, xtp1 = sample_fn(batch_key)
                 val_loss_t, _ = loss_fn(variables, val_key, xt, xtp1)
                 val_cce_t, _ = eval_fn(variables, val_key, xt, xtp1)
-                val_loss += val_loss_t
-                val_cce += val_cce_t
+                val_loss += val_loss_t.item()
+                val_cce += val_cce_t.item()
+
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
 
-            # TODO: fix CFG classes then uncomment
             # CFG accuracy eval:
             gen_tokens = gen_fn(variables, val_key)
             tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
@@ -129,7 +132,7 @@ def train(
                 save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/step_{step}.pkl")
             save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
 
-    save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
+    save_model(variables, opt_state, n_steps, f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
 
 
 if __name__ == "__main__":
@@ -149,8 +152,7 @@ if __name__ == "__main__":
     with open(args.gpt_config) as f:
         gpt_config = yaml.safe_load(f)
         gpt_config["gen_batch_size"] = train_config["gen_batch_size"]
-        # TODO: get delim token from the CFG class
-        gpt_config["delim_token"] = 0
+        gpt_config["delim_token"] = tokenizer.encode(DELIM_TOKEN).item()
         gpt_config["vocab_size"] = tokenizer.vocab_size
 
     gpt_config = GPTConfig(**gpt_config)
@@ -159,6 +161,6 @@ if __name__ == "__main__":
         optimizer_config = yaml.safe_load(f)
         optimizer_config["n_steps"] = train_config["n_steps"]
 
-    optimizer = get_optimizer(**optimizer_config)
+    optimizer, schedule = get_optimizer(**optimizer_config)
 
-    train(args.run_name, gpt_config, dataset, cfg, tokenizer, optimizer, **train_config)
+    train(args.run_name, gpt_config, dataset, cfg, tokenizer, optimizer, schedule, **train_config)
