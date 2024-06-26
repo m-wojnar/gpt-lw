@@ -86,6 +86,23 @@ class TransformerDo(nn.Module):
     logits_BxLxV = self.embed.attend(y_BxLxD.astype(jnp.float32))
     return logits_BxLxV
 
+  # NOTE: not adding any fancy logit wrappers (top_k, top_p, etc.) here since
+  # vocab size is probably too small for it to be relevant
+  def gen(self):
+    def scan_fn(gpt, carry):
+        prev_token, key = carry
+        key, cat_key = jax.random.split(key)
+
+        logits = gpt(prev_token)
+        next_token = jax.random.categorical(cat_key, logits)
+        return (next_token, key), next_token
+
+    scan = nn.scan(scan_fn, variable_broadcast='params', out_axes=1, length=self.docfg.L)
+    # first_token = jnp.ones((self.config.gen_batch_size, 1), dtype=int) * self.docfg.delim_token
+    first_token = jnp.ones((64, 1), dtype=int) * 0 
+    _, generated = scan(self, (first_token, self.make_rng('gpt')))
+    return generated.squeeze()
+
 
 class Mlp(nn.Module):
   """Multilayer perceptron."""
@@ -98,11 +115,6 @@ class Mlp(nn.Module):
         nn.Dense, kernel_init=init('mlp_kernel', cfg), use_bias=False,
         dtype=cfg.dtype
     )
-
-    print(cfg.dtype)
-    print(cfg.dtype)
-    print(cfg.dtype)
-    print(cfg.dtype)
 
     x_BxLxF = linear(cfg.F)(x_BxLxD)
     x_BxLxF = jax.nn.gelu(x_BxLxF)
