@@ -129,6 +129,7 @@ def train(
             # CFG accuracy eval:
             gen_tokens = gen_fn(variables, val_key)
             tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
+            print(len(tot_cfg_samples))
 
             cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
             log_dict["val/cfg_acc"] = cfg_acc
@@ -139,7 +140,6 @@ def train(
             print(log_dict)
             if logging == "wandb":
                 wandb.log(log_dict)
-            # elif logging == "stdout":
 
         if step % save_freq == 0 and step > 0:
             if save_intermediate:
