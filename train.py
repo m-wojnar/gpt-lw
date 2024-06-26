@@ -136,10 +136,10 @@ def train(
         log_dict["val/time"] = val_time
 
         if step % log_freq == 0:
+            print(log_dict)
             if logging == "wandb":
                 wandb.log(log_dict)
-            elif logging == "stdout":
-                print(log_dict)
+            # elif logging == "stdout":
 
         if step % save_freq == 0 and step > 0:
             if save_intermediate:
