@@ -130,7 +130,6 @@ def train(
             # CFG accuracy eval:
             gen_tokens = gen_fn(variables, val_key)
             tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
-            print(len(tot_cfg_samples))
 
             cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
             log_dict["val/cfg_acc"] = cfg_acc
