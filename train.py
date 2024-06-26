@@ -171,5 +171,4 @@ if __name__ == "__main__":
 
     optimizer, schedule = get_optimizer(**optimizer_config)
 
-    run_name = f"{args.run_name}_{args.loss_weighting}"
-    train(run_name, gpt_config, train_dataset, val_dataset, cfg, tokenizer, optimizer, schedule, args.loss_weighting, **train_config)
+    train(args.run_name, gpt_config, train_dataset, val_dataset, cfg, tokenizer, optimizer, schedule, args.loss_weighting, **train_config)
