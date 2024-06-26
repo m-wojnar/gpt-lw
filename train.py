@@ -1,4 +1,5 @@
 import os
+import time
 from argparse import ArgumentParser
 from functools import partial
 from typing import Literal
@@ -97,16 +98,22 @@ def train(
 
     # train loop
     for step in range(init_step, n_steps):
+        t0_train = time.time()
         log_dict = {'step': step, 'tokens': step * batch_size * config.seq_len}
         train_key, batch_key = jax.random.split(train_key)
         xt, xtp1 = train_sample_fn(batch_key)
 
         variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
 
+        train_time = time.time() - t0_train
+        log_dict["perf/train_time"] = train_time
+        log_dict["perf/train_tokens_p_s"] = batch_size * config.seq_len / train_time
+
         log_dict["train/loss"] = loss.item()
         log_dict["train/lr"] = schedule(opt_state[-1].count)
 
         if step % val_freq == 0:
+            t0_val = time.time()
             val_loss, val_cce = 0.0, 0.0
 
             for i in range(n_val_steps):
@@ -123,15 +130,18 @@ def train(
             # CFG accuracy eval:
             gen_tokens = gen_fn(variables, val_key)
             tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
+            print(len(tot_cfg_samples))
 
             cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
             log_dict["val/cfg_acc"] = cfg_acc
 
+            val_time = time.time() - t0_val
+            log_dict["perf/val_time"] = val_time
+
         if step % log_freq == 0:
+            print(log_dict)
             if logging == "wandb":
                 wandb.log(log_dict)
-            elif logging == "stdout":
-                print(log_dict)
 
         if step % save_freq == 0 and step > 0:
             if save_intermediate:
@@ -171,5 +181,4 @@ if __name__ == "__main__":
 
     optimizer, schedule = get_optimizer(**optimizer_config)
 
-    run_name = f"{args.run_name}_{args.loss_weighting}"
-    train(run_name, gpt_config, train_dataset, val_dataset, cfg, tokenizer, optimizer, schedule, args.loss_weighting, **train_config)
+    train(args.run_name, gpt_config, train_dataset, val_dataset, cfg, tokenizer, optimizer, schedule, args.loss_weighting, **train_config)
