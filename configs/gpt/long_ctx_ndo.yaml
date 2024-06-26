@@ -1,0 +1,6 @@
+L: 512
+D: 64
+F: 128
+H: 4
+N: 4
+fsdp_enabled: false
