@@ -98,6 +98,12 @@ class Mlp(nn.Module):
         nn.Dense, kernel_init=init('mlp_kernel', cfg), use_bias=False,
         dtype=cfg.dtype
     )
+
+    print(cfg.dtype)
+    print(cfg.dtype)
+    print(cfg.dtype)
+    print(cfg.dtype)
+
     x_BxLxF = linear(cfg.F)(x_BxLxD)
     x_BxLxF = jax.nn.gelu(x_BxLxF)
     x_BxLxD = linear(cfg.D)(x_BxLxF)
