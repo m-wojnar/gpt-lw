@@ -111,8 +111,8 @@ def train(
         log_dict["train/loss"] = loss.item()
         log_dict["train/lr"] = schedule(opt_state[-1].count)
 
-        t0_val = time.time()
         if step % val_freq == 0:
+            t0_val = time.time()
             val_loss, val_cce = 0.0, 0.0
 
             for i in range(n_val_steps):
@@ -133,8 +133,9 @@ def train(
 
             cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
             log_dict["val/cfg_acc"] = cfg_acc
-        val_time = time.time() - t0_val
-        log_dict["val/time"] = val_time
+
+            val_time = time.time() - t0_val
+            log_dict["val/time"] = val_time
 
         if step % log_freq == 0:
             print(log_dict)

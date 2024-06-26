@@ -1,4 +1,4 @@
-seq_len: 1024
+seq_len: 512
 embed_dim: 64
 ff_dim: 128
 num_heads: 4

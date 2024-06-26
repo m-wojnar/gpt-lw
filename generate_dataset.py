@@ -6,7 +6,7 @@ DELIM_TOKEN = ","
 
 
 if __name__ == "__main__":
-    cfg_name = "cfg3b"
+    cfg_name = "cfg3b_half"
     n_train_samples = 100000
     n_val_samples = 1000
     dataset_name = f"{cfg_name}_{n_train_samples}"
