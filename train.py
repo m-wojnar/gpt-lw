@@ -1,4 +1,5 @@
 import os
+import time
 from argparse import ArgumentParser
 from functools import partial
 from typing import Literal
@@ -97,15 +98,20 @@ def train(
 
     # train loop
     for step in range(init_step, n_steps):
+        t0_train = time.time()
         log_dict = {'step': step, 'tokens': step * batch_size * config.seq_len}
         train_key, batch_key = jax.random.split(train_key)
         xt, xtp1 = train_sample_fn(batch_key)
 
         variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
 
+        train_time = time.time() - t0_train
+        log_dict["train/time"] = train_time
+
         log_dict["train/loss"] = loss.item()
         log_dict["train/lr"] = schedule(opt_state[-1].count)
 
+        t0_val = time.time()
         if step % val_freq == 0:
             val_loss, val_cce = 0.0, 0.0
 
@@ -126,6 +132,8 @@ def train(
 
             cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
             log_dict["val/cfg_acc"] = cfg_acc
+        val_time = time.time() - t0_val
+        log_dict["val/time"] = val_time
 
         if step % log_freq == 0:
             if logging == "wandb":
