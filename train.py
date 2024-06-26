@@ -106,7 +106,8 @@ def train(
         variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
 
         train_time = time.time() - t0_train
-        log_dict["train/time"] = train_time
+        log_dict["perf/train_time"] = train_time
+        log_dict["perf/train_tokens_p_s"] = batch_size * config.seq_len / train_time
 
         log_dict["train/loss"] = loss.item()
         log_dict["train/lr"] = schedule(opt_state[-1].count)
@@ -135,7 +136,7 @@ def train(
             log_dict["val/cfg_acc"] = cfg_acc
 
             val_time = time.time() - t0_val
-            log_dict["val/time"] = val_time
+            log_dict["perf/val_time"] = val_time
 
         if step % log_freq == 0:
             print(log_dict)
