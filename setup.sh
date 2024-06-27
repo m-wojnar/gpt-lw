@@ -17,4 +17,4 @@ pip install -r requirements.txt
 python generate_dataset.py
 
 # Train the model
-./train.sh "$@"
+./train.sh

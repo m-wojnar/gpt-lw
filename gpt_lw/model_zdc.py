@@ -16,19 +16,21 @@ class GPTConfig:
     drop_rate: float
     gen_batch_size: int
     delim_token: int
+    dtype: jnp.dtype
 
 
 class FeedForwardBlock(nn.Module):
     ff_dim: int
     drop_rate: float
+    dtype: jnp.dtype
 
     @nn.compact
     def __call__(self, x, training=True):
         out_dim = x.shape[-1]
-        x = nn.Dense(self.ff_dim)(x)
+        x = nn.Dense(self.ff_dim, dtype=self.dtype)(x)
         x = nn.gelu(x)
         x = nn.Dropout(self.drop_rate)(x, deterministic=not training)
-        x = nn.Dense(out_dim)(x)
+        x = nn.Dense(out_dim, dtype=self.dtype)(x)
         x = nn.Dropout(self.drop_rate)(x, deterministic=not training)
         return x
 
@@ -37,18 +39,19 @@ class TransformerBlock(nn.Module):
     num_heads: int
     ff_dim: int
     drop_rate: float
-    decode: bool = False
+    decode: bool
+    dtype: jnp.dtype
 
     @nn.compact
     def __call__(self, x, mask, training=True):
         residual = x
-        x = nn.LayerNorm()(x)
-        x = nn.MultiHeadDotProductAttention(num_heads=self.num_heads, qkv_features=x.shape[-1], decode=self.decode)(x, mask=mask)
+        x = nn.LayerNorm(dtype=self.dtype)(x)
+        x = nn.MultiHeadDotProductAttention(num_heads=self.num_heads, qkv_features=x.shape[-1], decode=self.decode, dtype=self.dtype)(x, mask=mask)
         x = x + residual
 
         residual = x
-        x = nn.LayerNorm()(x)
-        x = FeedForwardBlock(self.ff_dim, self.drop_rate)(x, training=training)
+        x = nn.LayerNorm(dtype=self.dtype)(x)
+        x = FeedForwardBlock(self.ff_dim, self.drop_rate, self.dtype)(x, training=training)
         x = x + residual
 
         return x
@@ -63,20 +66,21 @@ class Transformer(nn.Module):
     num_layers: int
     drop_rate: float
     decode: bool
+    dtype: jnp.dtype
 
     @nn.compact
     def __call__(self, x, pos, mask, training=True):
-        x = nn.Embed(self.vocab_size, self.embed_dim)(x)
-        pos_emb = nn.Embed(self.seq_len, self.embed_dim)(pos)
+        x = nn.Embed(self.vocab_size, self.embed_dim, dtype=self.dtype)(x)
+        pos_emb = nn.Embed(self.seq_len, self.embed_dim, dtype=self.dtype)(pos)
 
         x = x + pos_emb
-        x = nn.LayerNorm()(x)
+        x = nn.LayerNorm(dtype=self.dtype)(x)
 
         for _ in range(self.num_layers):
-            x = TransformerBlock(self.num_heads, self.ff_dim, self.drop_rate, self.decode)(x, mask, training=training)
+            x = TransformerBlock(self.num_heads, self.ff_dim, self.drop_rate, self.decode, self.dtype)(x, mask, training=training)
 
-        x = nn.LayerNorm()(x)
-        x = nn.Dense(self.vocab_size)(x)
+        x = nn.LayerNorm(dtype=self.dtype)(x)
+        x = nn.Dense(self.vocab_size, dtype=self.dtype)(x)
 
         return x
 
@@ -100,7 +104,7 @@ class GPT(nn.Module):
             mask = None
         else:
             pos = jnp.arange(x.shape[1])
-            mask = nn.make_causal_mask(x)
+            mask = nn.make_causal_mask(x, dtype=self.config.dtype)
 
         return Transformer(
             self.config.vocab_size,
@@ -110,7 +114,8 @@ class GPT(nn.Module):
             self.config.num_heads,
             self.config.num_layers,
             self.config.drop_rate,
-            not training
+            not training,
+            self.config.dtype
         )(x, pos, mask, training=training)
 
     # NOTE: not adding any fancy logit wrappers (top_k, top_p, etc.) here since

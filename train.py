@@ -172,6 +172,7 @@ if __name__ == "__main__":
         gpt_config["gen_batch_size"] = train_config["gen_batch_size"]
         gpt_config["delim_token"] = tokenizer.encode(DELIM_TOKEN).item()
         gpt_config["vocab_size"] = tokenizer.vocab_size
+        gpt_config["dtype"] = getattr(jnp, gpt_config["dtype"], float)
 
     gpt_config = GPTConfig(**gpt_config)
 
