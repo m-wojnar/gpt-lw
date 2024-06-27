@@ -97,8 +97,8 @@ def train(
     eval_fn = jax.jit(eval_fn)
     train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.L))
     val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.L))
-    # gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
-    gen_fn = jax.jit(lambda variables, key: forward(model, variables, key, method="gen")[0])
+
+    gen_fn = jax.jit(lambda variables, key: model.gen(key, variables['params'], batch_size, config.L))
 
     # train loop
     for step in range(init_step, n_steps):

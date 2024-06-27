@@ -88,20 +88,25 @@ class TransformerDo(nn.Module):
 
   # NOTE: not adding any fancy logit wrappers (top_k, top_p, etc.) here since
   # vocab size is probably too small for it to be relevant
-  def gen(self):
-    def scan_fn(gpt, carry):
-        prev_token, key = carry
-        key, cat_key = jax.random.split(key)
+  def gen(self, key, params, batch_size, n_tokens, temperature=1.0):
+      tokens = jnp.zeros((batch_size, n_tokens), dtype=jnp.int32)
+      indices = jnp.arange(n_tokens)
 
-        logits = gpt(prev_token)
-        next_token = jax.random.categorical(cat_key, logits)
-        return (next_token, key), next_token
+      # tokens index -> tokens None
+      def scan_f(tokens, i):
+          step_key = jax.random.fold_in(key, i)
+          logits = self.apply({'params': params}, tokens)
+          print(logits.shape)
+          logits = logits[:, i - 1, :] / temperature
+          next_token = jax.random.categorical(step_key, logits, axis=-1)
+          tokens = tokens.at[:, i].set(next_token)
+          return tokens, None
 
-    scan = nn.scan(scan_fn, variable_broadcast='params', out_axes=1, length=self.docfg.L)
-    # first_token = jnp.ones((self.config.gen_batch_size, 1), dtype=int) * self.docfg.delim_token
-    first_token = jnp.ones((64, 1), dtype=int) * 0 
-    _, generated = scan(self, (first_token, self.make_rng('gpt')))
-    return generated.squeeze()
+      tokens, _ = jax.lax.scan(scan_f, tokens, indices)
+      return tokens
+
+
+
 
 
 class Mlp(nn.Module):
