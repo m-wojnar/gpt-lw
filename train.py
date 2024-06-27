@@ -23,7 +23,7 @@ from gpt_lw.model_nanodo import DoConfig, TransformerDo
 
 def train(
         run_name: str,
-        config: GPTConfig,
+        config: DoConfig,
         train_dataset: Array,
         val_dataset: Array,
         cfg: CFG,
