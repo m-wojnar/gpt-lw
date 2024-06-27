@@ -88,15 +88,16 @@ class TransformerDo(nn.Module):
 
   # NOTE: not adding any fancy logit wrappers (top_k, top_p, etc.) here since
   # vocab size is probably too small for it to be relevant
-  def gen(self, key, params, batch_size, n_tokens, temperature=1.0):
-      tokens = jnp.zeros((batch_size, n_tokens), dtype=jnp.int32)
-      indices = jnp.arange(n_tokens)
+  def gen(self, key, params, delim_token, batch_size, n_tokens, temperature=1.0):
+      sot = jnp.ones((batch_size, 1), dtype=jnp.int32) * delim_token
+      padding = jnp.zeros((batch_size, n_tokens - 1), dtype=jnp.int32)
+      tokens = jnp.concatenate([sot, padding], axis=1)
+      indices = jnp.arange(1, n_tokens)
 
       # tokens index -> tokens None
       def scan_f(tokens, i):
           step_key = jax.random.fold_in(key, i)
           logits = self.apply({'params': params}, tokens)
-          print(logits.shape)
           logits = logits[:, i - 1, :] / temperature
           next_token = jax.random.categorical(step_key, logits, axis=-1)
           tokens = tokens.at[:, i].set(next_token)
@@ -104,9 +105,6 @@ class TransformerDo(nn.Module):
 
       tokens, _ = jax.lax.scan(scan_f, tokens, indices)
       return tokens
-
-
-
 
 
 class Mlp(nn.Module):
