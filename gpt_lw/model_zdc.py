@@ -66,20 +66,21 @@ class TransformerBlock(nn.Module):
 class Transformer(nn.Module):
     config: GPTConfig
 
-    @nn.compact
+    def setup(self) -> None:
+        self.token_emb = nn.Embed(self.config.vocab_size, self.config.embed_dim, embedding_init=self.config.embed_init)
+        self.pos_emb = nn.Embed(self.config.seq_len, self.config.embed_dim, embedding_init=self.config.embed_init)
+        self.t_blocks = [TransformerBlock(self.config) for _ in range(self.config.num_layers)]
+        self.out_ln = nn.LayerNorm(dtype=self.config.dtype, use_bias=False)
+
     def __call__(self, x, pos, mask, training=True):
-        embed = partial(nn.Embed, features=self.config.embed_dim, embedding_init=self.config.embed_init)
-        x = embed(self.config.vocab_size)(x)
-        pos_emb = embed(self.config.seq_len)(pos)
+        x = self.token_emb(x)
+        x = x + self.pos_emb(pos)
 
-        x = x + pos_emb
-        x = nn.LayerNorm(dtype=self.config.dtype, use_bias=False)(x)
+        for block in self.t_blocks:
+            x = block(x, mask, training=training)
 
-        for _ in range(self.config.num_layers):
-            x = TransformerBlock(self.config)(x, mask, training=training)
-
-        x = nn.LayerNorm(dtype=self.config.dtype, use_bias=False)(x)
-        x = nn.Dense(self.config.vocab_size, dtype=self.config.dtype, use_bias=False, kernel_init=self.config.kernel_init)(x)
+        x = self.out_ln(x)
+        x = self.token_emb.attend(x.astype(jnp.float32))
 
         return x
 
