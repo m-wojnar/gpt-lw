@@ -89,6 +89,7 @@ class TransformerDo(nn.Module):
   # NOTE: not adding any fancy logit wrappers (top_k, top_p, etc.) here since
   # vocab size is probably too small for it to be relevant
   def gen(self, key, params, delim_token, batch_size, n_tokens, temperature=1.0):
+      # TODO: kv cache
       sot = jnp.ones((batch_size, 1), dtype=jnp.int32) * delim_token
       padding = jnp.zeros((batch_size, n_tokens - 1), dtype=jnp.int32)
       tokens = jnp.concatenate([sot, padding], axis=1)

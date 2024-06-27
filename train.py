@@ -16,7 +16,9 @@ from generate_dataset import DELIM_TOKEN
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.loss import get_weighted_loss
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_model, load_model, forward
-from gpt_lw.model_zdc import GPT, GPTConfig
+
+# from gpt_lw.model_zdc import GPT, GPTConfig
+from gpt_lw.model_nanodo import DoConfig, TransformerDo
 
 
 def train(
@@ -66,9 +68,10 @@ def train(
     print(f"Device: {device}")
 
     # init model
-    model = GPT(config)
-    inputs = jnp.empty((batch_size, config.seq_len), dtype=int)
-    cache = init_cache(model, inputs)
+    model = TransformerDo(config)
+
+    inputs = jnp.empty((batch_size, config.L), dtype=int)
+    # cache = init_cache(model, inputs)
 
     if checkpoint_path:
         print(f"Loading model from checkpoint: {checkpoint_path}")
@@ -92,14 +95,16 @@ def train(
     step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
     loss_fn = jax.jit(loss_fn)
     eval_fn = jax.jit(eval_fn)
-    train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len))
-    val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len))
-    gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
+    train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.L))
+    val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.L))
+
+    delim_token_id = tokenizer.encode(DELIM_TOKEN).item()
+    gen_fn = jax.jit(lambda variables, key: model.gen(key, variables['params'], delim_token_id, batch_size, config.L))
 
     # train loop
     for step in range(init_step, n_steps):
         t0_train = time.time()
-        log_dict = {'step': step, 'tokens': step * batch_size * config.seq_len}
+        log_dict = {'step': step, 'tokens': step * batch_size * config.L}
         train_key, batch_key = jax.random.split(train_key)
         xt, xtp1 = train_sample_fn(batch_key)
 
@@ -107,35 +112,35 @@ def train(
 
         train_time = time.time() - t0_train
         log_dict["perf/train_time"] = train_time
-        log_dict["perf/train_tokens_p_s"] = batch_size * config.seq_len / train_time
+        log_dict["perf/train_tokens_p_s"] = batch_size * config.L / train_time
 
         log_dict["train/loss"] = loss.item()
         log_dict["train/lr"] = schedule(opt_state[-1].count)
 
-        # if step % val_freq == 0:
-        #     t0_val = time.time()
-        #     val_loss, val_cce = 0.0, 0.0
+        if step % val_freq == 0:
+            t0_val = time.time()
+            val_loss, val_cce = 0.0, 0.0
 
-        #     for i in range(n_val_steps):
-        #         val_key, batch_key = jax.random.split(val_key)
-        #         xt, xtp1 = val_sample_fn(batch_key)
-        #         val_loss_t, _ = loss_fn(variables, val_key, xt, xtp1)
-        #         val_cce_t, _ = eval_fn(variables, val_key, xt, xtp1)
-        #         val_loss += val_loss_t.item()
-        #         val_cce += val_cce_t.item()
+            for i in range(n_val_steps):
+                val_key, batch_key = jax.random.split(val_key)
+                xt, xtp1 = val_sample_fn(batch_key)
+                val_loss_t, _ = loss_fn(variables, val_key, xt, xtp1)
+                val_cce_t, _ = eval_fn(variables, val_key, xt, xtp1)
+                val_loss += val_loss_t.item()
+                val_cce += val_cce_t.item()
 
-        #     log_dict["val/loss"] = val_loss / n_val_steps
-        #     log_dict["val/cce"] = val_cce / n_val_steps
+            log_dict["val/loss"] = val_loss / n_val_steps
+            log_dict["val/cce"] = val_cce / n_val_steps
 
-        #     # CFG accuracy eval:
-        #     gen_tokens = gen_fn(variables, val_key)
-        #     tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
+            # CFG accuracy eval:
+            gen_tokens = gen_fn(variables, val_key)
+            tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
 
-        #     cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
-        #     log_dict["val/cfg_acc"] = cfg_acc
+            cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
+            log_dict["val/cfg_acc"] = cfg_acc
 
-        #     val_time = time.time() - t0_val
-        #     log_dict["perf/val_time"] = val_time
+            val_time = time.time() - t0_val
+            log_dict["perf/val_time"] = val_time
 
         if step % log_freq == 0:
             print(log_dict)
@@ -168,11 +173,10 @@ if __name__ == "__main__":
 
     with open(args.gpt_config) as f:
         gpt_config = yaml.safe_load(f)
-        gpt_config["gen_batch_size"] = train_config["gen_batch_size"]
-        gpt_config["delim_token"] = tokenizer.encode(DELIM_TOKEN).item()
-        gpt_config["vocab_size"] = tokenizer.vocab_size
+        gpt_config["V"] = tokenizer.vocab_size
+        gpt_config['dtype'] = jnp.bfloat16
 
-    gpt_config = GPTConfig(**gpt_config)
+    gpt_config = DoConfig(**gpt_config)
 
     with open(args.optimizer_config) as f:
         optimizer_config = yaml.safe_load(f)

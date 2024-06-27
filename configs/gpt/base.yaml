@@ -1,6 +1,6 @@
-seq_len: 256
-embed_dim: 64
-ff_dim: 128
-num_heads: 4
-num_layers: 4
-drop_rate: 0.0
+L: 512
+D: 64
+F: 128
+H: 4
+N: 4
+fsdp_enabled: false
