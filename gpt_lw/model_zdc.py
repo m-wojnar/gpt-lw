@@ -70,8 +70,8 @@ class Transformer(nn.Module):
 
     @nn.compact
     def __call__(self, x, pos, mask, training=True):
-        x = nn.Embed(self.vocab_size, self.embed_dim, dtype=self.dtype)(x)
-        pos_emb = nn.Embed(self.seq_len, self.embed_dim, dtype=self.dtype)(pos)
+        x = nn.Embed(self.vocab_size, self.embed_dim)(x)
+        pos_emb = nn.Embed(self.seq_len, self.embed_dim)(pos)
 
         x = x + pos_emb
         x = nn.LayerNorm(dtype=self.dtype)(x)
