@@ -14,7 +14,7 @@ from chex import Array
 from cfg_dataset.cfg import CFG
 from generate_dataset import DELIM_TOKEN
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
-from gpt_lw.loss import get_weighted_loss
+from gpt_lw.loss import get_weighted_loss, compute_ngram_weights
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_model, load_model, forward
 from gpt_lw.model_zdc import GPT, GPTConfig
 
@@ -23,12 +23,15 @@ def train(
         run_name: str,
         config: GPTConfig,
         train_dataset: Array,
+        train_weights: Array,
         val_dataset: Array,
+        val_weights: Array,
         cfg: CFG,
         tokenizer: Tokenizer,
         optimizer: optax.GradientTransformation,
         schedule: optax.Schedule,
         loss_weighting: str,
+        precomputed: bool,
         batch_size: int,
         n_steps: int,
         seed: int,
@@ -86,14 +89,14 @@ def train(
     print(f"Model has {n_params} parameters")
 
     # compiled functions
-    loss_fn = get_weighted_loss(model, loss_weighting)
-    eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
+    loss_fn = get_weighted_loss(model, loss_weighting, precomputed)
+    eval_fn = get_weighted_loss(model, "unweighted", False)  # CCE/compression
 
     step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
     loss_fn = jax.jit(loss_fn)
     eval_fn = jax.jit(eval_fn)
-    train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len))
-    val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len))
+    train_sample_fn = jax.jit(partial(sample_batch, train_dataset, train_weights, batch_size, config.seq_len))
+    val_sample_fn = jax.jit(partial(sample_batch, val_dataset, val_weights, batch_size, config.seq_len))
     gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
 
     # train loop
@@ -101,9 +104,9 @@ def train(
         t0_train = time.time()
         log_dict = {'step': step, 'tokens': step * batch_size * config.seq_len}
         train_key, batch_key = jax.random.split(train_key)
-        xt, xtp1 = train_sample_fn(batch_key)
+        batch = train_sample_fn(batch_key)
 
-        variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
+        variables, opt_state, loss = step_fn(variables, (train_key, *batch), opt_state)
 
         train_time = time.time() - t0_train
         log_dict["perf/train_time"] = train_time
@@ -118,9 +121,9 @@ def train(
 
             for i in range(n_val_steps):
                 val_key, batch_key = jax.random.split(val_key)
-                xt, xtp1 = val_sample_fn(batch_key)
-                val_loss_t, _ = loss_fn(variables, val_key, xt, xtp1)
-                val_cce_t, _ = eval_fn(variables, val_key, xt, xtp1)
+                batch = val_sample_fn(batch_key)
+                val_loss_t, _ = loss_fn(variables, val_key, *batch)
+                val_cce_t, _ = eval_fn(variables, val_key, *batch)
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
 
@@ -157,7 +160,7 @@ if __name__ == "__main__":
     args.add_argument("--optimizer_config", type=str, default="configs/optimizer/debug.yaml")
     args.add_argument("--train_config", type=str, default="configs/train/debug.yaml")
     args.add_argument("--run_name", type=str, default="debug")
-    args.add_argument("--loss_weighting", type=str, default="unweighted")
+    args.add_argument("--loss_weighting", type=str, default="ngram_1_2_3")
     args = args.parse_args()
 
     with open(args.train_config) as f:
@@ -166,6 +169,15 @@ if __name__ == "__main__":
     cfg = CFG(rules_file=f"configs/cfg/{train_config['cfg_name']}.cfg")
     train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"])
     val_dataset, _ = get_dataset(train_config["val_dataset_path"])
+
+    if "ngram" in args.loss_weighting:
+        ngram_sizes = [int(s) for s in args.loss_weighting.split("_")[1:]]
+        train_weights, val_weights = compute_ngram_weights(train_dataset, val_dataset, ngram_sizes)
+        train_config["precomputed"] = True
+    else:
+        train_weights = jnp.ones_like(train_dataset)
+        val_weights = jnp.ones_like(val_dataset)
+        train_config["precomputed"] = False
 
     with open(args.gpt_config) as f:
         gpt_config = yaml.safe_load(f)
@@ -182,4 +194,7 @@ if __name__ == "__main__":
 
     optimizer, schedule = get_optimizer(**optimizer_config)
 
-    train(args.run_name, gpt_config, train_dataset, val_dataset, cfg, tokenizer, optimizer, schedule, args.loss_weighting, **train_config)
+    train(
+        args.run_name, gpt_config, train_dataset, train_weights, val_dataset, val_weights,
+        cfg, tokenizer, optimizer, schedule, args.loss_weighting, **train_config
+    )

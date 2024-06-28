@@ -1,6 +1,10 @@
+from collections import Counter
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
+from nltk.util import ngrams
 
 from gpt_lw.model_utils import forward
 
@@ -26,7 +30,38 @@ def compute_relative_positions(tokens, delim_token):
     return relative_positions
 
 
-def get_weighted_loss(model, weighting):
+def compute_ngram_weights(train_tokens, val_tokens, ngram_sizes):
+    train_tokens = train_tokens.tolist()
+    val_tokens = val_tokens.tolist()
+    n = len(train_tokens)
+
+    train_weights = np.zeros_like(train_tokens, dtype=np.float32)
+    val_weights = np.zeros_like(val_tokens, dtype=np.float32)
+
+    for size in ngram_sizes:
+        ng = ngrams(train_tokens, size)
+        ng = Counter(ng)
+        w = jax.tree.map(lambda x: x / (n - size + 1), dict(ng))
+        w = jax.tree.map(lambda x: 1 - x, w)
+        norm = sum(w[k] * ng[k] for k in ng) / (n - size + 1)
+        w = jax.tree.map(lambda x: x / norm, w)
+
+        train_weights[:size - 1] += 1
+        val_weights[:size - 1] += 1
+
+        for i in range(size - 1, len(train_tokens)):
+            train_weights[i] += w[tuple(train_tokens[i - size + 1:i + 1])]
+
+        for i in range(size - 1, len(val_tokens)):
+            val_weights[i] += w[tuple(val_tokens[i - size + 1:i + 1])]
+
+    train_weights /= len(ngram_sizes)
+    val_weights /= len(ngram_sizes)
+
+    return jnp.asarray(train_weights), jnp.asarray(val_weights)
+
+
+def get_weighted_loss(model, weighting, precomputed):
     if weighting == "unweighted":
         def unweighted(x):
             return 1.0
@@ -38,10 +73,12 @@ def get_weighted_loss(model, weighting):
             return weights
         weight_fn = negexp_relpos
 
-    def weighted_nt(variables, key, xt, xtp1):
+    def weighted_nt(variables, key, xt, xtp1, weights):
         logits, state = forward(model, variables, key, xt)
         token_loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
-        weights = weight_fn(xt)
+
+        if not precomputed:
+            weights = weight_fn(xt)
 
         weighted_loss = token_loss * weights
         return weighted_loss.mean(), state

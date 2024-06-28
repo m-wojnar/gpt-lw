@@ -30,8 +30,9 @@ def get_dataset(txt_path: str) -> tuple[Array, Tokenizer]:
     return data_e, tokenizer
 
 
-def sample_batch(input_tensor: Array, batch_size: int, seq_len: int, key: PRNGKey) -> tuple[Array, Array]:
+def sample_batch(input_tensor: Array, weights: Array, batch_size: int, seq_len: int, key: PRNGKey) -> tuple[Array, Array, Array]:
     N = input_tensor.shape[0]
     indices = jax.random.randint(key, (batch_size,), minval=0, maxval=N - seq_len + 1)
     batch = jax.vmap(lambda i: jax.lax.dynamic_slice(input_tensor, (i,), (seq_len,)))(indices)
-    return batch[:, :-1], batch[:, 1:]
+    weights = jax.vmap(lambda i: jax.lax.dynamic_slice(weights, (i,), (seq_len,)))(indices)
+    return batch[:, :-1], batch[:, 1:], weights[:, :-1]
