@@ -1,3 +1,4 @@
+import os
 import jax
 import jax.numpy as jnp
 import optax
@@ -26,24 +27,39 @@ def compute_relative_positions(tokens, delim_token):
     return relative_positions
 
 
-def get_weighted_loss(model, weighting):
+def get_weighted_loss(model, weighting, delim_token=-1):
     if weighting == "unweighted":
         def unweighted(x):
             return 1.0
         weight_fn = unweighted
     elif weighting == "negexp_relpos":
         def negexp_relpos(x):
-            relative_positions = compute_relative_positions(x, delim_token=0)
+            relative_positions = compute_relative_positions(x, delim_token=delim_token)
             weights = (-jnp.exp(-relative_positions) + 1.0) * (27.0 / 26.0) + 1e-3
             return weights
         weight_fn = negexp_relpos
+    elif os.path.exists(weighting): # passed through tensor
+        weights = jnp.load(weighting)
+        def tensor_relpos(x):
+            relative_positions = compute_relative_positions(x, delim_token=delim_token)
+            return weights[relative_positions]
+        weight_fn = tensor_relpos
 
     def weighted_nt(variables, key, xt, xtp1):
         logits, state = forward(model, variables, key, xt)
         token_loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
         weights = weight_fn(xt)
+        print(weights)
 
         weighted_loss = token_loss * weights
         return weighted_loss.mean(), state
 
     return weighted_nt
+
+def get_per_token_loss(model):
+    def per_token_loss(variables, key, xt, xtp1):
+        logits, state = forward(model, variables, key, xt)
+        token_loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
+        return token_loss, state
+
+    return per_token_loss

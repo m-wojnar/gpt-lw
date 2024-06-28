@@ -87,7 +87,7 @@ def train(
     print(f"Model has {n_params} parameters")
 
     # compiled functions
-    loss_fn = get_weighted_loss(model, loss_weighting)
+    loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(DELIM_TOKEN_NL).item())
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
     step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
