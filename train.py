@@ -136,6 +136,10 @@ def train(
 
                 cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
                 log_dict["val/cfg_acc"] = cfg_acc
+            else: # just sample some and print
+                gen_tokens = gen_fn(variables, val_key)
+                gen_samples = [tokenizer.decode(t) for t in gen_tokens]
+                print(gen_samples[:5])
 
             val_time = time.time() - t0_val
             log_dict["perf/val_time"] = val_time
