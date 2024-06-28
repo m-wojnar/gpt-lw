@@ -105,8 +105,6 @@ def train(
         xt, xtp1 = train_sample_fn(batch_key)
 
         variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
-        print(loss)
-        quit()
 
         train_time = time.time() - t0_train
         log_dict["perf/train_time"] = train_time

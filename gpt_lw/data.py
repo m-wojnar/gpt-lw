@@ -34,7 +34,8 @@ class SimpleTokenizer(Tokenizer):
 class NeoxTokenizer(Tokenizer):
     def __init__(self):
         self.enc = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
-        self.vocab_size = self.enc.vocab_size
+        # self.vocab_size = self.enc.vocab_size
+        self.vocab_size = 50432
 
     def encode(self, text: str) -> Array:
         return jnp.array(self.enc.encode(text))
