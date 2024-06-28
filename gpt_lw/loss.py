@@ -49,7 +49,6 @@ def get_weighted_loss(model, weighting, delim_token=-1):
         logits, state = forward(model, variables, key, xt)
         token_loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
         weights = weight_fn(xt)
-        print(weights)
 
         weighted_loss = token_loss * weights
         return weighted_loss.mean(), state
