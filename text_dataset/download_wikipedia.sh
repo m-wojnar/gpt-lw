@@ -3,7 +3,7 @@
 # Create directory if it doesn't exist
 mkdir -p wikipedia
 
-N = 1
+N=1
 
 # Generate file list with zero-padded numbers
 FILE_LIST=()
