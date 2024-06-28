@@ -14,8 +14,8 @@ if __name__ == "__main__":
     wikipedia_dir = "text_dataset/wikipedia/"
     dataset_name = "wikipedia"
     shuffle = True
-    train_n_pages = 100
-    val_n_pages = 10
+    train_n_pages = 1
+    val_n_pages = 1
 
     parquet_files = glob.glob(os.path.join(wikipedia_dir, "*.parquet"))
 
