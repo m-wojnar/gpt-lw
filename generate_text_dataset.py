@@ -12,7 +12,7 @@ from gpt_lw.data import NeoxTokenizer
 DELIM_TOKEN_NL = "<|endoftext|>"
 
 if __name__ == "__main__":
-    wikipedia_dir = "text_dataset/wikipedia/data/20220301.en"
+    wikipedia_dir = "text_dataset/wikipedia/"
     dataset_name = "wikipedia"
     shuffle = True
     train_n_pages = 10
