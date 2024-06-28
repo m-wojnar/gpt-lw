@@ -3,7 +3,6 @@ import glob
 import random
 
 import pandas as pd
-import tiktoken
 import jax.numpy as jnp
 from tqdm import tqdm
 
