@@ -2,7 +2,7 @@ import random
 
 from cfg_dataset.cfg import CFG
 
-DELIM_TOKEN = ","
+DELIM_TOKEN_CFG = ","
 
 
 if __name__ == "__main__":

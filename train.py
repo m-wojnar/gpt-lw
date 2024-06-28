@@ -12,7 +12,8 @@ import yaml
 from chex import Array
 
 from cfg_dataset.cfg import CFG
-from generate_dataset import DELIM_TOKEN
+from generate_cfg_dataset import DELIM_TOKEN_CFG
+from generate_text_dataset import DELIM_TOKEN_NL
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.loss import get_weighted_loss
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_model, load_model, forward
@@ -104,6 +105,8 @@ def train(
         xt, xtp1 = train_sample_fn(batch_key)
 
         variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
+        print(loss)
+        quit()
 
         train_time = time.time() - t0_train
         log_dict["perf/train_time"] = train_time
@@ -128,12 +131,13 @@ def train(
             log_dict["val/cce"] = val_cce / n_val_steps
 
             # CFG accuracy eval:
-            gen_tokens = gen_fn(variables, val_key)
-            tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
-            print(len(tot_cfg_samples))
+            # TODO: this needs to be removed into some "eval suite" which you configure
+            if cfg is not None: 
+                gen_tokens = gen_fn(variables, val_key)
+                tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
 
-            cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
-            log_dict["val/cfg_acc"] = cfg_acc
+                cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
+                log_dict["val/cfg_acc"] = cfg_acc
 
             val_time = time.time() - t0_val
             log_dict["perf/val_time"] = val_time
@@ -163,9 +167,16 @@ if __name__ == "__main__":
     with open(args.train_config) as f:
         train_config = yaml.safe_load(f)
 
-    cfg = CFG(rules_file=f"configs/cfg/{train_config['cfg_name']}.cfg")
-    train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"])
-    val_dataset, _ = get_dataset(train_config["val_dataset_path"])
+    cfg = None
+    if 'cfg_name' in train_config:
+        cfg = CFG(rules_file=f"configs/cfg/{train_config['cfg_name']}.cfg")
+        DELIM_TOKEN = DELIM_TOKEN_CFG
+        train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"], dataset_type="cfg")
+        val_dataset, _ = get_dataset(train_config["val_dataset_path"])
+    else:
+        DELIM_TOKEN = DELIM_TOKEN_NL
+        train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"], dataset_type="text")
+        val_dataset, _ = get_dataset(train_config["val_dataset_path"], dataset_type="text")
 
     with open(args.gpt_config) as f:
         gpt_config = yaml.safe_load(f)
