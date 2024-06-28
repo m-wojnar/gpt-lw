@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -16,67 +17,70 @@ class GPTConfig:
     drop_rate: float
     gen_batch_size: int
     delim_token: int
+    dtype: jnp.dtype
+    embed_init: nn.initializers.Initializer = nn.initializers.variance_scaling(1.0, 'fan_in', 'normal', out_axis=0)
+    kernel_init: nn.initializers.Initializer = nn.initializers.xavier_uniform()
 
 
 class FeedForwardBlock(nn.Module):
-    ff_dim: int
-    drop_rate: float
+    config: GPTConfig
 
     @nn.compact
     def __call__(self, x, training=True):
+        dense = partial(nn.Dense, dtype=self.config.dtype, use_bias=False, kernel_init=self.config.kernel_init)
         out_dim = x.shape[-1]
-        x = nn.Dense(self.ff_dim)(x)
+
+        x = dense(self.config.ff_dim)(x)
         x = nn.gelu(x)
-        x = nn.Dropout(self.drop_rate)(x, deterministic=not training)
-        x = nn.Dense(out_dim)(x)
-        x = nn.Dropout(self.drop_rate)(x, deterministic=not training)
+        x = nn.Dropout(self.config.drop_rate)(x, deterministic=not training)
+        x = dense(out_dim)(x)
+        x = nn.Dropout(self.config.drop_rate)(x, deterministic=not training)
         return x
 
 
 class TransformerBlock(nn.Module):
-    num_heads: int
-    ff_dim: int
-    drop_rate: float
-    decode: bool = False
+    config: GPTConfig
 
     @nn.compact
     def __call__(self, x, mask, training=True):
         residual = x
-        x = nn.LayerNorm()(x)
-        x = nn.MultiHeadDotProductAttention(num_heads=self.num_heads, qkv_features=x.shape[-1], decode=self.decode)(x, mask=mask)
+        x = nn.LayerNorm(dtype=self.config.dtype, use_bias=False)(x)
+        x = nn.MultiHeadDotProductAttention(
+            num_heads=self.config.num_heads,
+            qkv_features=x.shape[-1],
+            decode=not training,
+            dtype=self.config.dtype,
+            kernel_init=self.config.kernel_init,
+            use_bias=False
+        )(x, mask=mask)
         x = x + residual
 
         residual = x
-        x = nn.LayerNorm()(x)
-        x = FeedForwardBlock(self.ff_dim, self.drop_rate)(x, training=training)
+        x = nn.LayerNorm(dtype=self.config.dtype, use_bias=False)(x)
+        x = FeedForwardBlock(self.config)(x, training=training)
         x = x + residual
 
         return x
 
 
 class Transformer(nn.Module):
-    vocab_size: int
-    seq_len: int
-    embed_dim: int
-    ff_dim: int
-    num_heads: int
-    num_layers: int
-    drop_rate: float
-    decode: bool
+    config: GPTConfig
 
-    @nn.compact
+    def setup(self) -> None:
+        self.token_emb = nn.Embed(self.config.vocab_size, self.config.embed_dim, embedding_init=self.config.embed_init)
+        self.pos_emb = nn.Embed(self.config.seq_len, self.config.embed_dim, embedding_init=self.config.embed_init)
+        self.t_blocks = [TransformerBlock(self.config) for _ in range(self.config.num_layers)]
+        self.out_ln = nn.LayerNorm(dtype=self.config.dtype, use_bias=False)
+
     def __call__(self, x, pos, mask, training=True):
-        x = nn.Embed(self.vocab_size, self.embed_dim)(x)
-        pos_emb = nn.Embed(self.seq_len, self.embed_dim)(pos)
+        x = self.token_emb(x)
+        x = x + self.pos_emb(pos)
 
-        x = x + pos_emb
-        x = nn.LayerNorm()(x)
+        for block in self.t_blocks:
+            x = block(x, mask, training=training)
 
-        for _ in range(self.num_layers):
-            x = TransformerBlock(self.num_heads, self.ff_dim, self.drop_rate, self.decode)(x, mask, training=training)
-
-        x = nn.LayerNorm()(x)
-        x = nn.Dense(self.vocab_size)(x)
+        x = self.out_ln(x)
+        x = self.token_emb.attend(x.astype(jnp.float32))
 
         return x
 
@@ -100,18 +104,9 @@ class GPT(nn.Module):
             mask = None
         else:
             pos = jnp.arange(x.shape[1])
-            mask = nn.make_causal_mask(x)
+            mask = nn.make_causal_mask(x, dtype=self.config.dtype)
 
-        return Transformer(
-            self.config.vocab_size,
-            self.config.seq_len,
-            self.config.embed_dim,
-            self.config.ff_dim,
-            self.config.num_heads,
-            self.config.num_layers,
-            self.config.drop_rate,
-            not training
-        )(x, pos, mask, training=training)
+        return Transformer(self.config)(x, pos, mask, training=training)
 
     # NOTE: not adding any fancy logit wrappers (top_k, top_p, etc.) here since
     # vocab size is probably too small for it to be relevant
