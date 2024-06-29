@@ -14,6 +14,7 @@ from chex import Array
 from cfg_dataset.cfg import CFG
 from generate_dataset import DELIM_TOKEN
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
+from gpt_lw.grad_utils import grad_norm_per_token
 from gpt_lw.loss import get_weighted_loss
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_model, load_model, forward
 from gpt_lw.model_zdc import GPT, GPTConfig
@@ -86,14 +87,21 @@ def train(
     print(f"Model has {n_params} parameters")
 
     # compiled functions
+    def mean_loss_fn(fn):
+        def _fn(*args):
+            loss, aux = fn(*args)
+            return loss.mean(), aux
+        return _fn
+
     loss_fn = get_weighted_loss(model, loss_weighting)
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
-    step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
-    loss_fn = jax.jit(loss_fn)
-    eval_fn = jax.jit(eval_fn)
-    train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len))
-    val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len))
+    grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
+    step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
+    loss_fn = jax.jit(mean_loss_fn(loss_fn))
+    eval_fn = jax.jit(mean_loss_fn(eval_fn))
+    train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
+    val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len + 1))
     gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
 
     # train loop
@@ -123,6 +131,8 @@ def train(
                 val_cce_t, _ = eval_fn(variables, val_key, xt, xtp1)
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
+
+                print(f"Grad norm: {grad_norm_fn(variables, val_key, xt, xtp1)}")
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
