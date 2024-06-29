@@ -35,4 +35,4 @@ def sample_batch(input_tensor: Array, weights: Array, batch_size: int, seq_len: 
     indices = jax.random.randint(key, (batch_size,), minval=0, maxval=N - seq_len + 1)
     batch = jax.vmap(lambda i: jax.lax.dynamic_slice(input_tensor, (i,), (seq_len,)))(indices)
     weights = jax.vmap(lambda i: jax.lax.dynamic_slice(weights, (i,), (seq_len,)))(indices)
-    return batch[:, :-1], batch[:, 1:], weights[:, :-1]
+    return batch[:, :-1], batch[:, 1:], weights[:, 1:]
