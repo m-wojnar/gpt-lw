@@ -44,13 +44,11 @@ def forward(model, variables, key, *x, method=None):
     return model.apply(variables, *x, rngs={'gpt': gpt_key, 'dropout': dropout_key}, mutable=list(set(variables) - {'params'}), method=method)
 
 
-def save_model(variables, opt_state, step, path):
+def save_variables(*variables, path):
     with lz4.frame.open(path, 'wb') as f:
-        cloudpickle.dump({'variables': variables, 'opt_state': opt_state, 'step': step}, f)
+        cloudpickle.dump(variables, f)
 
 
-def load_model(path):
+def load_variables(path):
     with lz4.frame.open(path, 'rb') as f:
-        ckpt = cloudpickle.load(f)
-    variables, opt_state, init_step = ckpt['variables'], ckpt['opt_state'], ckpt['step']
-    return variables, opt_state, init_step
+        return cloudpickle.load(f)
