@@ -74,12 +74,12 @@ def train(
 
     if checkpoint_path:
         print(f"Loading model from checkpoint: {checkpoint_path}")
-        variables, opt_state, grad_norm, init_step = load_variables(checkpoint_path)
+        variables, opt_state, misc_metrics, init_step = load_variables(checkpoint_path)
     else:
         variables = init(model, init_key, inputs)
         opt_state = optimizer.init(variables["params"])
         init_step = 0
-        grad_norm = []
+        misc_metrics = []
 
     if init_step == n_steps:
         print("Model already trained for n_steps!")
@@ -135,7 +135,7 @@ def train(
                 val_cce += val_cce_t.item()
 
                 token_loss, grads = grad_norm_fn(variables, val_key, xt, xtp1)
-                grad_norm.append((xt, xtp1, token_loss, grads, step))
+                misc_metrics.append((xt, xtp1, token_loss, grads, step))
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
@@ -163,10 +163,10 @@ def train(
 
         if step % save_freq == 0 and step > 0:
             if save_intermediate:
-                save_variables(variables, opt_state, grad_norm, step, path=f"runs/{run_name}/checkpoints/step_{step}.pkl")
-            save_variables(variables, opt_state, grad_norm, step, path=f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
+                save_variables(variables, opt_state, misc_metrics, step, path=f"runs/{run_name}/checkpoints/step_{step}.pkl")
+            save_variables(variables, opt_state, misc_metrics, step, path=f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
 
-    save_variables(variables, opt_state, grad_norm, n_steps, path=f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
+    save_variables(variables, opt_state, misc_metrics, n_steps, path=f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
 
 
 if __name__ == "__main__":
