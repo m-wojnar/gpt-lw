@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from gpt_lw.data import TextTokenizer
 
-DELIM_TOKEN_NL = "<|endoftext|>"
+EOT_TOKEN_NL = "<|endoftext|>"
 
 if __name__ == "__main__":
     wikipedia_dir = "text_dataset/wikipedia/"
@@ -31,8 +31,8 @@ if __name__ == "__main__":
 
     tokenizer = TextTokenizer()
 
-    delim_enc = tokenizer.encode(DELIM_TOKEN_NL)
-    pages_enc = [tokenizer.encode(page + DELIM_TOKEN_NL) for page in tqdm(all_pages)]
+    delim_enc = tokenizer.encode(EOT_TOKEN_NL)
+    pages_enc = [tokenizer.encode(page + EOT_TOKEN_NL) for page in tqdm(all_pages)]
 
     train_pages_enc = [delim_enc] + pages_enc[:train_n_pages]
     val_pages_enc = [delim_enc] + pages_enc[train_n_pages:train_n_pages + val_n_pages]

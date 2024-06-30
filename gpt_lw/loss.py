@@ -8,10 +8,10 @@ from gpt_lw.model_utils import forward
 
 def compute_relative_positions(tokens, delim_token):
     batch_size, seq_len = tokens.shape
-    relative_positions = jnp.full_like(tokens, fill_value=-seq_len)
+    relative_positions = jnp.ones((batch_size, seq_len), dtype=jnp.int32) * -seq_len
     
     delim_mask = (tokens == delim_token) 
-    delim_mask = delim_mask.at[:, 0].set(True) # sometimes first pos is not delim
+    delim_mask = delim_mask.at[:, 0].set(True) # default
     
     positions = jnp.arange(seq_len).reshape(1, -1)
     relative_positions = jnp.where(delim_mask, positions, relative_positions)

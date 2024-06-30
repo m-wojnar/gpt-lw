@@ -16,7 +16,7 @@ class GPTConfig:
     num_layers: int
     drop_rate: float
     gen_batch_size: int
-    delim_token: int
+    eot_token: int
     dtype: jnp.dtype
     embed_init: nn.initializers.Initializer = nn.initializers.variance_scaling(1.0, 'fan_in', 'normal', out_axis=0)
     kernel_init: nn.initializers.Initializer = nn.initializers.xavier_uniform()
@@ -120,6 +120,6 @@ class GPT(nn.Module):
             return (next_token, key), next_token
 
         scan = nn.scan(scan_fn, variable_broadcast='params', variable_carry='cache', out_axes=1, length=self.config.seq_len)
-        first_token = jnp.ones((self.config.gen_batch_size, 1), dtype=int) * self.config.delim_token
+        first_token = jnp.ones((self.config.gen_batch_size, 1), dtype=int) * self.config.eot_token
         _, generated = scan(self, (first_token, self.make_rng('gpt')))
         return generated.squeeze()

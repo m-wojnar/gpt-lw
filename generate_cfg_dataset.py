@@ -2,8 +2,7 @@ import random
 
 from cfg_dataset.cfg import CFG
 
-DELIM_TOKEN_CFG = ","
-
+EOT_TOKEN_CFG = ","
 
 if __name__ == "__main__":
     cfg_name = "cfg3b_half"
@@ -26,8 +25,8 @@ if __name__ == "__main__":
     print(f"Number of train samples: {len(train_samples)}")
     print(f"Number of val samples: {len(val_samples)}")
 
-    train_dataset_str = DELIM_TOKEN + DELIM_TOKEN.join(train_samples) + DELIM_TOKEN
-    val_dataset_str = DELIM_TOKEN + DELIM_TOKEN.join(val_samples) + DELIM_TOKEN
+    train_dataset_str = EOT_TOKEN + EOT_TOKEN.join(train_samples) + EOT_TOKEN
+    val_dataset_str = EOT_TOKEN + EOT_TOKEN.join(val_samples) + EOT_TOKEN
 
     if log_stats:
         avg_len = sum([len(s) for s in train_samples]) / len(train_samples)

@@ -12,8 +12,8 @@ import yaml
 from chex import Array
 
 from cfg_dataset.cfg import CFG
-from generate_cfg_dataset import DELIM_TOKEN_CFG
-from generate_text_dataset import DELIM_TOKEN_NL
+from generate_cfg_dataset import EOT_TOKEN_CFG
+from generate_text_dataset import EOT_TOKEN_NL
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.loss import get_weighted_loss
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_model, load_model, forward
@@ -87,7 +87,7 @@ def train(
     print(f"Model has {n_params} parameters")
 
     # compiled functions
-    loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(DELIM_TOKEN_NL).item())
+    loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item())
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
     step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
@@ -172,18 +172,18 @@ if __name__ == "__main__":
     cfg = None
     if 'cfg_name' in train_config:
         cfg = CFG(rules_file=f"configs/cfg/{train_config['cfg_name']}.cfg")
-        DELIM_TOKEN = DELIM_TOKEN_CFG
+        EOT_TOKEN = EOT_TOKEN_CFG
         train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"], dataset_type="cfg")
         val_dataset, _ = get_dataset(train_config["val_dataset_path"])
     else:
-        DELIM_TOKEN = DELIM_TOKEN_NL
+        EOT_TOKEN = EOT_TOKEN_NL
         train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"], dataset_type="text")
         val_dataset, _ = get_dataset(train_config["val_dataset_path"], dataset_type="text")
 
     with open(args.gpt_config) as f:
         gpt_config = yaml.safe_load(f)
         gpt_config["gen_batch_size"] = train_config["gen_batch_size"]
-        gpt_config["delim_token"] = tokenizer.encode(DELIM_TOKEN).item()
+        gpt_config["eot_token"] = tokenizer.encode(EOT_TOKEN).item()
         gpt_config["vocab_size"] = tokenizer.vocab_size
         gpt_config["dtype"] = getattr(jnp, gpt_config["dtype"], float)
 
