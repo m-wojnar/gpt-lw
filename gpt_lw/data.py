@@ -1,9 +1,8 @@
 import jax
 import jax.numpy as jnp
-import tiktoken
+import tokenmonster
 from chex import Array, PRNGKey
 
-from transformers import GPTNeoXTokenizerFast
 
 class Tokenizer:
     def encode(self, text: str) -> Array:
@@ -31,14 +30,14 @@ class SimpleTokenizer(Tokenizer):
         return "".join(chars)
 
 
-class NeoxTokenizer(Tokenizer):
+class TextTokenizer(Tokenizer):
     def __init__(self):
-        self.enc = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
-        # self.vocab_size = self.enc.vocab_size
-        self.vocab_size = 50432
+        self.enc = tokenmonster.load("english-2048-clean-v1")
+        self.enc.add_special_token("<|endoftext|>")
+        self.vocab_size = self.enc.vocab_size
 
     def encode(self, text: str) -> Array:
-        return jnp.array(self.enc.encode(text))
+        return jnp.array(self.enc.tokenize(text))
 
     def decode(self, tokens: Array) -> str:
         return self.enc.decode(tokens.tolist())
@@ -54,7 +53,7 @@ def get_dataset(path: str, dataset_type="cfg") -> tuple[Array, Tokenizer]:
     else:
         # load as jnp array
         data_e = jnp.load(path)
-        tokenizer = NeoxTokenizer()
+        tokenizer = TextTokenizer()
 
     return data_e, tokenizer
 

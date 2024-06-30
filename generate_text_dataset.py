@@ -6,7 +6,7 @@ import pandas as pd
 import jax.numpy as jnp
 from tqdm import tqdm
 
-from gpt_lw.data import NeoxTokenizer
+from gpt_lw.data import TextTokenizer
 
 DELIM_TOKEN_NL = "<|endoftext|>"
 
@@ -14,8 +14,8 @@ if __name__ == "__main__":
     wikipedia_dir = "text_dataset/wikipedia/"
     dataset_name = "wikipedia"
     shuffle = True
-    train_n_pages = 10000
-    val_n_pages = 10
+    train_n_pages = 100
+    val_n_pages = 1
 
     parquet_files = glob.glob(os.path.join(wikipedia_dir, "*.parquet"))
 
@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     all_pages = all_text[:train_n_pages + val_n_pages]
 
-    tokenizer = NeoxTokenizer()
+    tokenizer = TextTokenizer()
 
     delim_enc = tokenizer.encode(DELIM_TOKEN_NL)
     pages_enc = [tokenizer.encode(page + DELIM_TOKEN_NL) for page in tqdm(all_pages)]
