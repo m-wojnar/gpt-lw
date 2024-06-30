@@ -60,5 +60,4 @@ def get_per_token_loss(model):
         logits, state = forward(model, variables, key, xt)
         token_loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
         return token_loss, state
-
     return per_token_loss
