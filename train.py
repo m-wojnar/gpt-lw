@@ -93,8 +93,8 @@ def train(
     step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
     loss_fn = jax.jit(loss_fn)
     eval_fn = jax.jit(eval_fn)
-    train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len))
-    val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len))
+    train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
+    val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len + 1))
     gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
 
     # train loop
