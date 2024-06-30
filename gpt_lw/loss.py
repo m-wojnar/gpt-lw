@@ -51,7 +51,7 @@ def get_weighted_loss(model, weighting, delim_token=-1):
         weights = weight_fn(xt)
 
         weighted_loss = token_loss * weights
-        return weighted_loss.mean(), state
+        return weighted_loss, state
 
     return weighted_nt
 

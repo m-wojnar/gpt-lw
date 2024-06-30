@@ -15,8 +15,9 @@ from cfg_dataset.cfg import CFG
 from generate_cfg_dataset import EOT_TOKEN_CFG
 from generate_text_dataset import EOT_TOKEN_NL
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
+from gpt_lw.grad_utils import grad_norm_per_token
 from gpt_lw.loss import get_weighted_loss
-from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_model, load_model, forward
+from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_variables, load_variables, forward
 from gpt_lw.model_zdc import GPT, GPTConfig
 
 
@@ -73,11 +74,12 @@ def train(
 
     if checkpoint_path:
         print(f"Loading model from checkpoint: {checkpoint_path}")
-        variables, opt_state, init_step = load_model(checkpoint_path)
+        variables, opt_state, grad_norm, init_step = load_variables(checkpoint_path)
     else:
         variables = init(model, init_key, inputs)
         opt_state = optimizer.init(variables["params"])
         init_step = 0
+        grad_norm = []
 
     if init_step == n_steps:
         print("Model already trained for n_steps!")
@@ -87,12 +89,19 @@ def train(
     print(f"Model has {n_params} parameters")
 
     # compiled functions
+    def mean_loss_fn(fn):
+        def _fn(*args):
+            loss, aux = fn(*args)
+            return loss.mean(), aux
+        return _fn
+
     loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item())
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
-    step_fn = jax.jit(partial(gradient_step, loss_fn=loss_fn, optimizer=optimizer))
-    loss_fn = jax.jit(loss_fn)
-    eval_fn = jax.jit(eval_fn)
+    grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
+    step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
+    loss_fn = jax.jit(mean_loss_fn(loss_fn))
+    eval_fn = jax.jit(mean_loss_fn(eval_fn))
     train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
     val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len + 1))
     gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
@@ -125,6 +134,9 @@ def train(
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
 
+                token_loss, grads = grad_norm_fn(variables, val_key, xt, xtp1)
+                grad_norm.append((xt, xtp1, token_loss, grads, step))
+
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
 
@@ -151,10 +163,10 @@ def train(
 
         if step % save_freq == 0 and step > 0:
             if save_intermediate:
-                save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/step_{step}.pkl")
-            save_model(variables, opt_state, step, f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
+                save_variables(variables, opt_state, grad_norm, step, path=f"runs/{run_name}/checkpoints/step_{step}.pkl")
+            save_variables(variables, opt_state, grad_norm, step, path=f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
 
-    save_model(variables, opt_state, n_steps, f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
+    save_variables(variables, opt_state, grad_norm, n_steps, path=f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
 
 
 if __name__ == "__main__":
