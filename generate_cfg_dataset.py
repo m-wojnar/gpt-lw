@@ -25,8 +25,8 @@ if __name__ == "__main__":
     print(f"Number of train samples: {len(train_samples)}")
     print(f"Number of val samples: {len(val_samples)}")
 
-    train_dataset_str = EOT_TOKEN + EOT_TOKEN.join(train_samples) + EOT_TOKEN
-    val_dataset_str = EOT_TOKEN + EOT_TOKEN.join(val_samples) + EOT_TOKEN
+    train_dataset_str = EOT_TOKEN_CFG + EOT_TOKEN_CFG.join(train_samples) + EOT_TOKEN_CFG
+    val_dataset_str = EOT_TOKEN_CFG + EOT_TOKEN_CFG.join(val_samples) + EOT_TOKEN_CFG
 
     if log_stats:
         avg_len = sum([len(s) for s in train_samples]) / len(train_samples)
