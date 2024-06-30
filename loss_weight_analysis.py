@@ -3,22 +3,25 @@ import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import pickle
 
 from gpt_lw.loss import compute_relative_positions
 from gpt_lw.data import TextTokenizer
+from gpt_lw.model_utils import load_variables
 
 enc = TextTokenizer()
 
 
 # DELIM_TOKEN = enc.encode("\n")
+# DELIM_TOKEN = enc.encode(".\n")
 # DELIM_TOKEN = enc.encode("\n ")
 # DELIM_TOKEN = enc.encode(".")
 # DELIM_TOKEN = enc.encode(" that")
 # DELIM_TOKEN = enc.encode(" someone")
 # DELIM_TOKEN = enc.encode(" the")
 
-# DELIM_TOKEN = enc.encode("\n\n")
-DELIM_TOKEN = enc.encode("<|endoftext|>")
+DELIM_TOKEN = enc.encode("\n\n")
+# DELIM_TOKEN = enc.encode("<|endoftext|>")
 
 assert len(DELIM_TOKEN) == 1, DELIM_TOKEN
 DELIM_TOKEN = DELIM_TOKEN[0]
@@ -30,16 +33,21 @@ N_RP = 511 - 100
 SEQ_LEN = 512 - 1
 
 def compute_avg_loss_per_token():
-    # load Xs, Ys, and Ls
-    Xs = jnp.load("runs/tm_wiki_mini/analysis/Xs.npy")
-    Ys = jnp.load("runs/tm_wiki_mini/analysis/Ys.npy")
-    Ls = jnp.load("runs/tm_wiki_mini/analysis/Ls.npy")
-    print(f"Xs: {Xs.shape}, Ys: {Ys.shape}, Ls: {Ls.shape}")
+    _, _, misc_metrics, _ = load_variables("runs/debug/checkpoints/last.pkl")
+    Xs = jnp.concatenate([m[0] for m in misc_metrics])
+    Ls = jnp.concatenate([m[2] for m in misc_metrics])
+    Gs = jnp.concatenate([m[3] for m in misc_metrics])
+
+    # last N steps
+    Xs = Xs[-1000:]
+    Ls = Ls[-1000:]
+    Gs = Gs[-1000:]
+
+    print(f"Xs: {Xs.shape}, Ls: {Ls.shape}")
     
     # cut off first half of sequence (axis=1)
-    Xs = Xs[:, 100:]
-    Ys = Ys[:, 100:]
-    Ls = Ls[:, 100:]
+    # Xs = Xs[:, 100:]
+    # Ls = Ls[:, 100:]
 
     # check if DELIM_TOKEN in Xs
     dt_mask = Xs == DELIM_TOKEN
@@ -65,6 +73,7 @@ def compute_avg_loss_per_token():
     # compute how many tokens have each relative position and sum the loss for each position
     for i in tqdm(range(Xs.shape[0])):
         for j in range(Xs.shape[1]):
+            print(i, j)
             rp = RPs[i, j]
             l = Ls[i, j]
             count[rp] += 1
