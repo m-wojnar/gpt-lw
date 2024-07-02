@@ -1,6 +1,8 @@
 import os
 import glob
 
+from tqdm import tqdm
+
 import numpy as np
 import pandas as pd
 import torch
@@ -58,7 +60,7 @@ if __name__ == "__main__":
     history = []
 
     with torch.no_grad():
-        for tokens in data_loader:
+        for tokens in tqdm(data_loader):
             xt, xtp1 = tokens[:, :-1], tokens[:, 1:]
             output = model.forward(xt, use_cache=True).logits.permute(0, 2, 1)
             loss = F.cross_entropy(output, xtp1, reduction="none")
