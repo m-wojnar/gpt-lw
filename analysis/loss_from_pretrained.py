@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
-from transformers import AutoTokenizer, LlamaForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel
 
 EOT_TOKEN_NL = "<|endoftext|>"
 
@@ -45,12 +45,14 @@ class TextDataset(Dataset):
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
-    model = LlamaForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf").to(device)
+    # tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
+    # model = LlamaForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf").to(device)
+    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    model = AutoModelForCausalLM.from_pretrained("gpt2").to(device)
 
     text = EOT_TOKEN_NL.join(load_text_data())
     all_tokens = tokenizer(text, return_tensors="pt").input_ids[0]
-    text_dataset = TextDataset(all_tokens, seq_len=512 + 1, device=device)
+    text_dataset = TextDataset(all_tokens, seq_len=1024 + 1, device=device)
     data_loader = DataLoader(text_dataset, batch_size=64)
 
     history = []
