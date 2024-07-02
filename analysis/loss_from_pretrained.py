@@ -1,4 +1,5 @@
 import os
+import random
 import glob
 
 from tqdm import tqdm
@@ -41,7 +42,11 @@ class TextDataset(Dataset):
         return len(self.tokens) - self.seq_len
 
     def __getitem__(self, idx):
+        idx = random.randint(0, len(self) - 1)
         return self.tokens[idx:idx + self.seq_len].to(self.device)
+    
+    def __next__(self):
+        return self.__getitem__(0)
 
 
 if __name__ == "__main__":
@@ -56,11 +61,14 @@ if __name__ == "__main__":
     all_tokens = tokenizer(text, return_tensors="pt").input_ids[0]
     text_dataset = TextDataset(all_tokens, seq_len=1024 + 1, device=device)
     data_loader = DataLoader(text_dataset, batch_size=64)
+    iter_dl = iter(data_loader)
 
     history = []
 
+    n_steps = 1000
     with torch.no_grad():
-        for tokens in tqdm(data_loader):
+        for i in tqdm(range(n_steps)):
+            tokens = next(iter_dl)
             xt, xtp1 = tokens[:, :-1], tokens[:, 1:]
             output = model.forward(xt, use_cache=True).logits.permute(0, 2, 1)
             loss = F.cross_entropy(output, xtp1, reduction="none")
