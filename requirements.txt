@@ -13,3 +13,4 @@ PyYAML~=6.0.1
 tqdm~=4.66.2
 wandb~=0.17.2
 tokenmonster~=1.1.12
+torch~=2.3.1

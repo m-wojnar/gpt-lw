@@ -33,7 +33,7 @@ N_RP = 511 - 100
 SEQ_LEN = 512 - 1
 
 def compute_avg_loss_per_token():
-    _, _, misc_metrics, _ = load_variables("runs/debug/checkpoints/last.pkl")
+    _, _, misc_metrics, _ = load_variables("../runs/debug/checkpoints/last.pkl")
     Xs = jnp.concatenate([m[0] for m in misc_metrics])
     Ls = jnp.concatenate([m[2] for m in misc_metrics])
     Gs = jnp.concatenate([m[3] for m in misc_metrics])
@@ -83,7 +83,7 @@ def compute_avg_loss_per_token():
     avg_loss = [loss_sum[i] / count[i] if count[i] != 0 else 0 for i in range(N_RP)]
 
     # save as numpy array
-    # np.save("runs/wiki_mini/analysis/avg_loss.npy", np.array(avg_loss))
+    # np.save("../runs/wiki_mini/analysis/avg_loss.npy", np.array(avg_loss))
 
     # matplotlib code to plot the loss for each relative position
     plt.plot(avg_loss)
@@ -138,7 +138,7 @@ if __name__ == "__main__":
 
 
     '''
-    avg_loss = np.load("runs/wiki_mini/analysis/avg_loss.npy")
+    avg_loss = np.load("../runs/wiki_mini/analysis/avg_loss.npy")
     avg_loss = avg_loss[:N_RP]
 
     # weights_base = convert_to_pdist(avg_loss)
@@ -150,7 +150,7 @@ if __name__ == "__main__":
 
     print(weights.shape)
 
-    # np.save("runs/wiki_mini/analysis/weights_pow_smoothed.npy", weights)
+    # np.save("../runs/wiki_mini/analysis/weights_pow_smoothed.npy", weights)
     '''
 
 
