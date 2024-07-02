@@ -1,8 +1,9 @@
 import jax
 import jax.numpy as jnp
-import tiktoken
 import tokenmonster
 from chex import Array, PRNGKey
+
+# import tiktoken
 
 
 class Tokenizer:
