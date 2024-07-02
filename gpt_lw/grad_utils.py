@@ -18,3 +18,4 @@ def grad_norm_per_token(loss_fn, variables, key, xt, xtp1):
     grad_norms = jax.tree.map(lambda x: (x ** 2).reshape(x.shape[0], -1).sum(axis=1), grads)
     grad_norms = jnp.asarray(jax.tree.leaves(grad_norms)).sum(axis=0)
     return loss, jnp.sqrt(grad_norms)
+
