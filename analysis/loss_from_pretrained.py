@@ -9,7 +9,7 @@ import optax
 from tqdm import tqdm
 from transformers import AutoTokenizer, FlaxAutoModelForCausalLM
 
-from gpt_lw.data import sample_batch, TextTokenizer, get_dataset
+from gpt_lw.data import sample_batch, get_dataset
 from gpt_lw.model_utils import load_pretrained_model, forward
 
 
@@ -41,12 +41,12 @@ if __name__ == "__main__":
         text = EOT_TOKEN_NL.join(load_text_data())
         all_tokens = tokenizer(text, return_tensors="jax").input_ids[0]
 
-        model_fn = jax.jit(lambda x: model(x).logits)
+        model_fn = jax.jit(lambda x, k: model(x).logits)
     elif model_type == "gpt-lw":
         all_tokens, tokenizer = get_dataset("../text_dataset/train_wikipedia.npy", dataset_type="text")
         model, variables = load_pretrained_model("runs/debug")
 
-        model_fn = jax.jit(lambda x: forward(model, variables, key, x)[0])
+        model_fn = jax.jit(lambda x, k: forward(model, variables, k, x)[0])
 
     sample_fn = jax.jit(partial(sample_batch, all_tokens, batch_size, seq_len + 1))
 
@@ -54,9 +54,9 @@ if __name__ == "__main__":
     n_steps = 1000
 
     for i in tqdm(range(n_steps)):
-        key, batch_key = jax.random.split(key)
+        key, batch_key, model_key = jax.random.split(key, 3)
         xt, xtp1 = sample_fn(batch_key)
-        logits = model_fn(xt)
+        logits = model_fn(xt, model_key)
         loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
         history.append((xt, xtp1, loss))
 
