@@ -15,11 +15,8 @@ def compute_mean_loss_rp_matrix(Xs, Ls, vocab_size):
         for i in range(Xs.shape[1]):
             for j in range(i, Xs.shape[1]):
                 rp = j - i
-
-                # TODO: DOUBLE CHECK INDEXING!
                 mean_loss_rp[Xs[k, i], rp] += Ls[k, j]
                 counter_rp[Xs[k, i], rp] += 1
-                # TODO: DOUBLE CHECK INDEXING!
 
     mean_loss_rp = mean_loss_rp / counter_rp 
     mean_loss_rp[np.isnan(mean_loss_rp)] = 0  # replace NaNs with 0
@@ -37,8 +34,8 @@ if __name__ == "__main__":
     Xs = data['xt']
     Ls = data['loss']
 
-    Xs = Xs[:1000]
-    Ls = Ls[:1000]
+    Xs = Xs[:20000]
+    Ls = Ls[:20000]
 
     mean_loss_rp = compute_mean_loss_rp_matrix(Xs, Ls, tok.vocab_size)
 
