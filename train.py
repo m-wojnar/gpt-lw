@@ -43,18 +43,6 @@ def train(
         **kwargs
     ):
 
-    # TODO: expand run dir
-    # - auto run name if one not passed
-    # - save config in dir
-    # - logs (.out/.err, loss/acc curves) subdir
-    if not os.path.exists(f"runs/{run_name}"):
-        os.makedirs(f"runs/{run_name}/checkpoints")
-    else: # autoresume
-        if checkpoint_path is None:  # manual path has top priority
-            last_path = f"runs/{run_name}/checkpoints/last.pkl"
-            if os.path.exists(last_path):
-                checkpoint_path = last_path
-
     if logging == "wandb":
         wandb.init(project="gpt-lw", entity="gpt-lw", dir=f"runs/{run_name}", name=run_name)
 
@@ -227,7 +215,6 @@ if __name__ == "__main__":
         if args.checkpoint_path is None:  # manual path has top priority
             checkpoint_path = f"runs/{args.run_name}/checkpoints/last.pkl"
 
-
     train(
         run_name=args.run_name,
         config=gpt_config,
@@ -240,5 +227,3 @@ if __name__ == "__main__":
         checkpoint_path=args.checkpoint_path,
         **train_config
     )
-
-    # train(args.run_name, gpt_config, train_dataset, val_dataset, tokenizer, optimizer, schedule, args.loss_weighting, **train_config)
