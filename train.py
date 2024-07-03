@@ -72,8 +72,6 @@ def train(
         init_step = 0
         misc_metrics = []
 
-
-
     if init_step == n_steps:
         print("Model already trained for n_steps!")
         return
