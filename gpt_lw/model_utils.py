@@ -70,7 +70,7 @@ def load_train_state(keys, path):
     return train_state
 
 # NOTE: requires the config configured by train script (located in run dir)
-def load_pretrained_model(run_path, checkpoint_name="last.pkl"):
+def load_pretrained_model(run_path, checkpoint_name="last_variables"):
     # TODO: turn this into a general load_model class which we can use in train.py
     with open(os.path.join(run_path, "configs/gpt.yaml")) as f:
         gpt_config = yaml.safe_load(f)
@@ -81,7 +81,6 @@ def load_pretrained_model(run_path, checkpoint_name="last.pkl"):
     )
 
     model = GPT(gpt_config)
-    # TODO: this is bad, we should be able to load the model params without opt state or misc metrics 
-    variables, _, _, _ = load_variables(os.path.join(run_path, "checkpoints", checkpoint_name))
+    variables = load_variables(os.path.join(run_path, "checkpoints", checkpoint_name + ".pkl"))
 
     return model, variables
