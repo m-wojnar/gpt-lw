@@ -1,7 +1,7 @@
 #!/bin/bash
 
-BASE_DIR="/workspace/gpt-lw"
-VENV_DIR="${BASE_DIR}/venv"
+BASE_DIR="${BASE_DIR:=/workspace/gpt-lw}"
+VENV_DIR="${VENV_DIR:=$BASE_DIR/venv}"
 
 cd ${BASE_DIR}
 source ${VENV_DIR}/bin/activate
