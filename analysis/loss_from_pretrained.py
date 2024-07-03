@@ -1,15 +1,16 @@
 import os
-import random
 import glob
+from functools import partial
 
-from tqdm import tqdm
-
-import numpy as np
+import jax
+import jax.numpy as jnp
 import pandas as pd
-import torch
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, Dataset
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel
+import optax
+from tqdm import tqdm
+from transformers import AutoTokenizer, FlaxAutoModelForCausalLM
+
+from gpt_lw.data import sample_batch
+
 
 EOT_TOKEN_NL = "<|endoftext|>"
 
@@ -28,52 +29,28 @@ def load_text_data(dir="../text_dataset/wikipedia/", n_pages=1000):
     return all_text[:n_pages]
 
 
-def torch_to_numpy(*tensors):
-    return [t.detach().cpu().numpy() for t in tensors]
-
-
-class TextDataset(Dataset):
-    def __init__(self, tokens, seq_len, device):
-        self.tokens = tokens
-        self.seq_len = seq_len
-        self.device = device
-
-    def __len__(self):
-        return len(self.tokens) - self.seq_len
-
-    def __getitem__(self, idx):
-        idx = random.randint(0, len(self) - 1)
-        return self.tokens[idx:idx + self.seq_len].to(self.device)
-    
-    def __next__(self):
-        return self.__getitem__(0)
-
-
 if __name__ == "__main__":
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
-    # model = LlamaForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf").to(device)
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    model = AutoModelForCausalLM.from_pretrained("gpt2").to(device)
+    model = FlaxAutoModelForCausalLM.from_pretrained("gpt2")
 
     text = EOT_TOKEN_NL.join(load_text_data())
-    all_tokens = tokenizer(text, return_tensors="pt").input_ids[0]
-    text_dataset = TextDataset(all_tokens, seq_len=1024 + 1, device=device)
-    data_loader = DataLoader(text_dataset, batch_size=64)
-    iter_dl = iter(data_loader)
+    batch_size, seq_len = 64, 1024
+    key = jax.random.PRNGKey(42)
+
+    all_tokens = tokenizer(text, return_tensors="jax").input_ids[0]
+    sample_fn = jax.jit(partial(sample_batch, all_tokens, batch_size, seq_len + 1))
+    model_fn = jax.jit(lambda x: model(x).logits)
 
     history = []
-
     n_steps = 1000
-    with torch.no_grad():
-        for i in tqdm(range(n_steps)):
-            tokens = next(iter_dl)
-            xt, xtp1 = tokens[:, :-1], tokens[:, 1:]
-            output = model.forward(xt, use_cache=True).logits.permute(0, 2, 1)
-            loss = F.cross_entropy(output, xtp1, reduction="none")
-            history.append(torch_to_numpy(xt, xtp1, loss))
+
+    for i in tqdm(range(n_steps)):
+        key, batch_key = jax.random.split(key)
+        xt, xtp1 = sample_fn(batch_key)
+        logits = model_fn(xt)
+        loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
+        history.append((xt, xtp1, loss))
 
     xt_history, xtp1_history, loss_history = zip(*history)
-    xt_history, xtp1_history, loss_history = np.concatenate(xt_history), np.concatenate(xtp1_history), np.concatenate(loss_history)
-    np.savez("history.npz", xt=xt_history, xtp1=xtp1_history, loss=loss_history)
+    xt_history, xtp1_history, loss_history = jnp.concatenate(xt_history), jnp.concatenate(xtp1_history), jnp.concatenate(loss_history)
+    jnp.savez("history.npz", xt=xt_history, xtp1=xtp1_history, loss=loss_history)
