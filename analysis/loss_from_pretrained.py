@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
         model_fn = jax.jit(lambda x, k: model(x).logits)
     elif model_type == "gpt-lw":
-        all_tokens, tokenizer = get_dataset("../text_dataset/train_wikipedia.npy", dataset_type="text")
+        all_tokens, tokenizer = get_dataset("text_dataset/train_wikipedia.npy", dataset_type="text")
         model, variables = load_pretrained_model("runs/tm_wiki_mini")
 
         model_fn = jax.jit(lambda x, k: forward(model, variables, k, x)[0])
