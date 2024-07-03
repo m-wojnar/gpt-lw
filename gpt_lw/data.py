@@ -3,8 +3,6 @@ import jax.numpy as jnp
 import tokenmonster
 from chex import Array, PRNGKey
 
-# import tiktoken
-
 
 class Tokenizer:
     def encode(self, text: str) -> Array:
@@ -37,12 +35,9 @@ class TextTokenizer(Tokenizer):
         self.enc = tokenmonster.load("english-2048-clean-v1")
         self.enc.add_special_token("<|endoftext|>")
         self.vocab_size = self.enc.vocab_size
-        # self.enc = tiktoken.get_encoding("cl100k_base")
-        # self.vocab_size = self.enc.n_vocab
 
     def encode(self, text: str) -> Array:
         return jnp.array(self.enc.tokenize(text))
-        # return jnp.array(self.enc.encode(text, allowed_special={'<|endoftext|>'}))
 
     def decode(self, tokens: Array) -> str:
         return self.enc.decode(tokens.tolist())

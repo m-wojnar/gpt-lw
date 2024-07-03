@@ -16,9 +16,9 @@ from generate_cfg_dataset import EOT_TOKEN_CFG
 from generate_text_dataset import EOT_TOKEN_NL
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.grad_utils import grad_norm_per_token
-from gpt_lw.loss import get_weighted_loss, get_per_token_loss
+from gpt_lw.loss import get_weighted_loss
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_variables, load_variables, forward
-from gpt_lw.model_zdc import GPT, GPTConfig
+from gpt_lw.model import GPT, GPTConfig
 
 
 def train(
@@ -98,8 +98,7 @@ def train(
     loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item())
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
-    # grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
-    grad_norm_fn = jax.jit(get_per_token_loss(model))
+    grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
     step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
     loss_fn = jax.jit(mean_loss_fn(loss_fn))
     eval_fn = jax.jit(mean_loss_fn(eval_fn))
@@ -135,11 +134,8 @@ def train(
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
 
-                # TODO: deprecated for now
-                # token_loss, grads = grad_norm_fn(variables, val_key, xt, xtp1)
-                token_loss, _ = grad_norm_fn(variables, val_key, xt, xtp1)
-                # misc_metrics.append((xt, xtp1, token_loss, grads, step))
-                misc_metrics.append((xt, xtp1, token_loss, step))
+                token_loss, grads = grad_norm_fn(variables, val_key, xt, xtp1)
+                misc_metrics.append((xt, xtp1, token_loss, grads, step))
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps

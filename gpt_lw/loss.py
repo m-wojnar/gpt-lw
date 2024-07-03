@@ -54,10 +54,3 @@ def get_weighted_loss(model, weighting, delim_token=-1):
         return weighted_loss, state
 
     return weighted_nt
-
-def get_per_token_loss(model):
-    def per_token_loss(variables, key, xt, xtp1):
-        logits, state = forward(model, variables, key, xt)
-        token_loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
-        return token_loss, state
-    return per_token_loss
