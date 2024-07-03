@@ -31,6 +31,7 @@ def train(
         schedule: optax.Schedule,
         loss_weighting: str,
         batch_size: int,
+        grad_batch_size: int,
         n_steps: int,
         seed: int,
         save_freq: int,
@@ -98,16 +99,17 @@ def train(
     eval_fn = jax.jit(mean_loss_fn(eval_fn))
     train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
     val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len + 1))
+    grad_sample_fn = jax.jit(partial(sample_batch, train_dataset, grad_batch_size, config.seq_len + 1))
     gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
 
     # train loop
     for step in range(init_step, n_steps):
         t0_train = time.time()
         log_dict = {'step': step, 'tokens': step * batch_size * config.seq_len}
-        train_key, batch_key = jax.random.split(train_key)
+        step_key, batch_key, train_key = jax.random.split(train_key, 3)
         xt, xtp1 = train_sample_fn(batch_key)
 
-        variables, opt_state, loss = step_fn(variables, (train_key, xt, xtp1), opt_state)
+        variables, opt_state, loss = step_fn(variables, (step_key, xt, xtp1), opt_state)
 
         train_time = time.time() - t0_train
         log_dict["perf/train_time"] = train_time
@@ -121,14 +123,16 @@ def train(
             val_loss, val_cce = 0.0, 0.0
 
             for i in range(n_val_steps):
-                val_key, batch_key = jax.random.split(val_key)
-                xt, xtp1 = val_sample_fn(batch_key)
-                val_loss_t, _ = loss_fn(variables, val_key, xt, xtp1)
-                val_cce_t, _ = eval_fn(variables, val_key, xt, xtp1)
+                loss_key, eval_key, grad_key, val_batch_key, grad_batch_key, val_key = jax.random.split(val_key, 6)
+
+                xt, xtp1 = val_sample_fn(val_batch_key)
+                val_loss_t, _ = loss_fn(variables, loss_key, xt, xtp1)
+                val_cce_t, _ = eval_fn(variables, eval_key, xt, xtp1)
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
 
-                token_loss, grads = grad_norm_fn(variables, val_key, xt, xtp1)
+                xt, xtp1 = grad_sample_fn(grad_batch_key)
+                token_loss, grads = grad_norm_fn(variables, grad_key, xt, xtp1)
                 misc_metrics.append((xt, xtp1, token_loss, grads, step))
 
             log_dict["val/loss"] = val_loss / n_val_steps
@@ -159,7 +163,7 @@ if __name__ == "__main__":
     args = ArgumentParser()
     args.add_argument("--gpt_config", type=str, default="configs/gpt/debug.yaml")
     args.add_argument("--optimizer_config", type=str, default="configs/optimizer/debug.yaml")
-    args.add_argument("--train_config", type=str, default="configs/train/debug.yaml")
+    args.add_argument("--train_config", type=str, default="configs/train/debug_nl.yaml")
     args.add_argument("--checkpoint_path", type=str, default=None) # manual override of auto last checkpoint
     args.add_argument("--run_name", type=str, default="debug")
     args.add_argument("--loss_weighting", type=str, default="unweighted")

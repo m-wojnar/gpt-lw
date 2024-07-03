@@ -3,6 +3,7 @@ train_dataset_path: "cfg_dataset/simple4_100000_train.txt"
 val_dataset_path: "cfg_dataset/simple4_100000_val.txt"
 batch_size: 4
 gen_batch_size: 4
+grad_batch_size: 2
 n_steps: 10000
 seed: 42
 save_freq: 1000
