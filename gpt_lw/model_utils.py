@@ -1,7 +1,11 @@
+import os
 import jax
 import lz4.frame
 import optax
+import yaml
 from cloudpickle import cloudpickle
+
+from gpt_lw.model import GPT, GPTConfig
 
 
 def get_optimizer(lr, b1, b2, eps, weight_decay, warmup_pct, n_steps, div_factor, final_div_factor, lr_schedule="constant"):
@@ -52,3 +56,31 @@ def save_variables(*variables, path):
 def load_variables(path):
     with lz4.frame.open(path, 'rb') as f:
         return cloudpickle.load(f)
+
+
+def save_train_state(train_state, path):
+    for k, v in train_state.items():
+        save_variables(v, path=path + f"_{k}.pkl")
+
+
+def load_train_state(train_state, path):
+    for k in train_state.keys():
+        train_state[k] = load_variables(path=path + f"_{k}.pkl")[0]
+    return train_state
+
+
+# NOTE: requires the config configured by train script (located in run dir)
+def load_pretrained_model(run_path, checkpoint_name="last_variables"):
+    # TODO: turn this into a general load_model class which we can use in train.py
+    with open(os.path.join(run_path, "configs/gpt.yaml")) as f:
+        gpt_config = yaml.safe_load(f)
+    model_dtype = gpt_config.pop("dtype")
+    gpt_config = GPTConfig(
+        dtype=getattr(jax.numpy, model_dtype, float),
+        **gpt_config
+    )
+
+    model = GPT(gpt_config)
+    variables = load_variables(os.path.join(run_path, "checkpoints", checkpoint_name + ".pkl"))[0]
+
+    return model, variables

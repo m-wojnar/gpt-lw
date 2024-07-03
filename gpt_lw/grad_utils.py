@@ -14,5 +14,7 @@ def grad_norm_per_token(loss_fn, variables, key, xt, xtp1):
 
     grad_norms = jax.tree.map(lambda x: (x ** 2).sum(axis=tuple(range(2, x.ndim))), jacobian)
     grad_norms = jnp.asarray(jax.tree.leaves(grad_norms)).sum(axis=0)
-    return loss, jnp.sqrt(grad_norms)
+    grad_norms = jnp.sqrt(grad_norms)
+
+    return loss, grad_norms
 
