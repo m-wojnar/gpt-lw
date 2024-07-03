@@ -17,7 +17,7 @@ from generate_text_dataset import EOT_TOKEN_NL
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.grad_utils import grad_norm_per_token
 from gpt_lw.loss import get_weighted_loss
-from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_variables, load_variables, forward
+from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_train_state, load_train_state, forward
 from gpt_lw.model import GPT, GPTConfig
 
 
@@ -61,12 +61,18 @@ def train(
 
     if checkpoint_path:
         print(f"Loading model from checkpoint: {checkpoint_path}")
-        variables, opt_state, misc_metrics, init_step = load_variables(checkpoint_path)
+        train_state = load_train_state(checkpoint_path)
+        variables = train_state["variables"]
+        opt_state = train_state["opt_state"]
+        init_step = train_state["step"]
+        misc_metrics = train_state["misc_metrics"]
     else:
         variables = init(model, init_key, inputs)
         opt_state = optimizer.init(variables["params"])
         init_step = 0
         misc_metrics = []
+
+
 
     if init_step == n_steps:
         print("Model already trained for n_steps!")
@@ -135,12 +141,17 @@ def train(
             if logging == "wandb":
                 wandb.log(log_dict)
 
+        train_state = {
+            "variables": variables,
+            "opt_state": opt_state,
+            "misc_metrics": misc_metrics,
+            "step": init_step
+        }
         if step % save_freq == 0 and step > 0:
             if save_intermediate:
-                save_variables(variables, opt_state, misc_metrics, step, path=f"runs/{run_name}/checkpoints/step_{step}.pkl")
-            save_variables(variables, opt_state, misc_metrics, step, path=f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
-
-    save_variables(variables, opt_state, misc_metrics, n_steps, path=f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
+                save_train_state(train_state, path=f"runs/{run_name}/checkpoints/step_{step}")
+            save_train_state(train_state, path=f"runs/{run_name}/checkpoints/last")
+    save_train_state(train_state, path=f"runs/{run_name}/checkpoints/last")
 
 
 if __name__ == "__main__":
@@ -213,7 +224,7 @@ if __name__ == "__main__":
         val_dataset, _ = get_dataset(train_config["val_dataset_path"], dataset_type="text")
 
         if args.checkpoint_path is None:  # manual path has top priority
-            checkpoint_path = f"runs/{args.run_name}/checkpoints/last.pkl"
+            checkpoint_path = f"runs/{args.run_name}/checkpoints/last"
 
     train(
         run_name=args.run_name,

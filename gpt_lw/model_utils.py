@@ -58,6 +58,17 @@ def load_variables(path):
         return cloudpickle.load(f)
 
 
+def save_train_state(train_state, path):
+    for k, v in train_state.items():
+        # save_variables(v, path=os.path.join(path, f"{k}.pkl"))
+        save_variables(v, path=path + f"_{k}.pkl")
+
+def load_train_state(keys, path):
+    train_state = {}
+    for k in keys:
+        train_state[k] = load_variables(os.path.join(path, f"{k}.pkl"))
+    return train_state
+
 # NOTE: requires the config configured by train script (located in run dir)
 def load_pretrained_model(run_path, checkpoint_name="last.pkl"):
     # TODO: turn this into a general load_model class which we can use in train.py
@@ -70,6 +81,7 @@ def load_pretrained_model(run_path, checkpoint_name="last.pkl"):
     )
 
     model = GPT(gpt_config)
-    variables = load_variables(os.path.join(run_path, "checkpoints", checkpoint_name))
+    # TODO: this is bad, we should be able to load the model params without opt state or misc metrics 
+    variables, _, _, _ = load_variables(os.path.join(run_path, "checkpoints", checkpoint_name))
 
     return model, variables
