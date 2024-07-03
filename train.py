@@ -173,7 +173,7 @@ if __name__ == "__main__":
     args = ArgumentParser()
     args.add_argument("--gpt_config", type=str, default="configs/gpt/debug.yaml")
     args.add_argument("--optimizer_config", type=str, default="configs/optimizer/debug.yaml")
-    args.add_argument("--train_config", type=str, default="configs/train/debug.yaml")
+    args.add_argument("--train_config", type=str, default="configs/train/debug_nl.yaml")
     args.add_argument("--run_name", type=str, default="debug")
     args.add_argument("--loss_weighting", type=str, default="unweighted")
     args = args.parse_args()
