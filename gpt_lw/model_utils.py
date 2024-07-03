@@ -76,7 +76,7 @@ def load_pretrained_model(run_path, checkpoint_name="last.pkl"):
         gpt_config = yaml.safe_load(f)
     model_dtype = gpt_config.pop("dtype")
     gpt_config = GPTConfig(
-        dtype=getattr(jnp, model_dtype, float),
+        dtype=getattr(jax.numpy, model_dtype, float),
         **gpt_config
     )
 
