@@ -60,14 +60,14 @@ def load_variables(path):
 
 def save_train_state(train_state, path):
     for k, v in train_state.items():
-        # save_variables(v, path=os.path.join(path, f"{k}.pkl"))
         save_variables(v, path=path + f"_{k}.pkl")
 
-def load_train_state(keys, path):
-    train_state = {}
-    for k in keys:
-        train_state[k] = load_variables(os.path.join(path, f"{k}.pkl"))
+
+def load_train_state(train_state, path):
+    for k in train_state.keys():
+        train_state[k] = load_variables(path=path + f"_{k}.pkl")[0]
     return train_state
+
 
 # NOTE: requires the config configured by train script (located in run dir)
 def load_pretrained_model(run_path, checkpoint_name="last_variables"):

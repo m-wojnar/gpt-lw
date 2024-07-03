@@ -59,18 +59,21 @@ def train(
     inputs = jnp.empty((batch_size, config.seq_len), dtype=int)
     cache = init_cache(model, inputs)
 
+    train_state = {"variables": None, "opt_state": None, "misc_metrics": [], "step": 0}
     if checkpoint_path:
         print(f"Loading model from checkpoint: {checkpoint_path}")
-        train_state = load_train_state(checkpoint_path)
+        train_state = load_train_state(train_state, checkpoint_path)
         variables = train_state["variables"]
         opt_state = train_state["opt_state"]
         init_step = train_state["step"]
         misc_metrics = train_state["misc_metrics"]
+        print(f"Resuming from step {init_step}")
+        print(f"Metrics collected: {len(misc_metrics)}")
     else:
-        variables = init(model, init_key, inputs)
-        opt_state = optimizer.init(variables["params"])
-        init_step = 0
-        misc_metrics = []
+        train_state["variables"] = variables = init(model, init_key, inputs)
+        train_state["opt_state"] = opt_state = optimizer.init(variables["params"])
+        train_state["init_step"] = init_step = 0
+        train_state["misc_metrics"] = misc_metrics = []
 
     if init_step == n_steps:
         print("Model already trained for n_steps!")
@@ -143,7 +146,7 @@ def train(
             "variables": variables,
             "opt_state": opt_state,
             "misc_metrics": misc_metrics,
-            "step": init_step
+            "step": step,
         }
         if step % save_freq == 0 and step > 0:
             if save_intermediate:
@@ -222,7 +225,7 @@ if __name__ == "__main__":
         val_dataset, _ = get_dataset(train_config["val_dataset_path"], dataset_type="text")
 
         if args.checkpoint_path is None:  # manual path has top priority
-            checkpoint_path = f"runs/{args.run_name}/checkpoints/last"
+            args.checkpoint_path = f"runs/{args.run_name}/checkpoints/last"
 
     train(
         run_name=args.run_name,
