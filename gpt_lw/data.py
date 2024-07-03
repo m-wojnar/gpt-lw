@@ -1,9 +1,20 @@
 import jax
 import jax.numpy as jnp
+import tokenmonster
 from chex import Array, PRNGKey
+
+# import tiktoken
 
 
 class Tokenizer:
+    def encode(self, text: str) -> Array:
+        raise NotImplementedError
+
+    def decode(self, tokens: Array) -> str:
+        raise NotImplementedError
+
+
+class SimpleTokenizer(Tokenizer):
     def __init__(self, tokens: list[str]):
         tokens = sorted(tokens) # make sure order is deterministic
         self.vocab_size = len(tokens)
@@ -21,12 +32,34 @@ class Tokenizer:
         return "".join(chars)
 
 
-def get_dataset(txt_path: str) -> tuple[Array, Tokenizer]:
-    with open(txt_path, "r") as f:
-        data = f.read()
-    tokens = sorted(list(set(data)))
-    tokenizer = Tokenizer(tokens)
-    data_e = tokenizer.encode(data)
+class TextTokenizer(Tokenizer):
+    def __init__(self):
+        self.enc = tokenmonster.load("english-2048-clean-v1")
+        self.enc.add_special_token("<|endoftext|>")
+        self.vocab_size = self.enc.vocab_size
+        # self.enc = tiktoken.get_encoding("cl100k_base")
+        # self.vocab_size = self.enc.n_vocab
+
+    def encode(self, text: str) -> Array:
+        return jnp.array(self.enc.tokenize(text))
+        # return jnp.array(self.enc.encode(text, allowed_special={'<|endoftext|>'}))
+
+    def decode(self, tokens: Array) -> str:
+        return self.enc.decode(tokens.tolist())
+
+
+def get_dataset(path: str, dataset_type="cfg") -> tuple[Array, Tokenizer]:
+    if dataset_type == "cfg":
+        with open(path, "r") as f:
+            data = f.read()
+        tokens = sorted(list(set(data)))
+        tokenizer = SimpleTokenizer(tokens)
+        data_e = tokenizer.encode(data)
+    else:
+        # load as jnp array
+        data_e = jnp.load(path)
+        tokenizer = TextTokenizer()
+
     return data_e, tokenizer
 
 

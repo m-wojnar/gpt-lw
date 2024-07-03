@@ -12,9 +12,3 @@ pip install -U pip setuptools wheel
 
 # Install the requirements
 pip install -r requirements.txt
-
-# Generate the dataset
-python generate_dataset.py
-
-# Train the model
-./train.sh

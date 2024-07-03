@@ -12,10 +12,11 @@ import yaml
 from chex import Array
 
 from cfg_dataset.cfg import CFG
-from generate_dataset import DELIM_TOKEN
+from generate_cfg_dataset import EOT_TOKEN_CFG
+from generate_text_dataset import EOT_TOKEN_NL
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.grad_utils import grad_norm_per_token
-from gpt_lw.loss import get_weighted_loss
+from gpt_lw.loss import get_weighted_loss, get_per_token_loss
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_variables, load_variables, forward
 from gpt_lw.model_zdc import GPT, GPTConfig
 
@@ -73,12 +74,12 @@ def train(
 
     if checkpoint_path:
         print(f"Loading model from checkpoint: {checkpoint_path}")
-        variables, opt_state, grad_norm, init_step = load_variables(checkpoint_path)
+        variables, opt_state, misc_metrics, init_step = load_variables(checkpoint_path)
     else:
         variables = init(model, init_key, inputs)
         opt_state = optimizer.init(variables["params"])
         init_step = 0
-        grad_norm = []
+        misc_metrics = []
 
     if init_step == n_steps:
         print("Model already trained for n_steps!")
@@ -94,10 +95,11 @@ def train(
             return loss.mean(), aux
         return _fn
 
-    loss_fn = get_weighted_loss(model, loss_weighting)
+    loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item())
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
-    grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
+    # grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
+    grad_norm_fn = jax.jit(get_per_token_loss(model))
     step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
     loss_fn = jax.jit(mean_loss_fn(loss_fn))
     eval_fn = jax.jit(mean_loss_fn(eval_fn))
@@ -133,19 +135,27 @@ def train(
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
 
-                token_loss, grads = grad_norm_fn(variables, val_key, xt, xtp1)
-                grad_norm.append((xt, xtp1, token_loss, grads, step))
+                # TODO: deprecated for now
+                # token_loss, grads = grad_norm_fn(variables, val_key, xt, xtp1)
+                token_loss, _ = grad_norm_fn(variables, val_key, xt, xtp1)
+                # misc_metrics.append((xt, xtp1, token_loss, grads, step))
+                misc_metrics.append((xt, xtp1, token_loss, step))
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
 
             # CFG accuracy eval:
-            gen_tokens = gen_fn(variables, val_key)
-            tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
-            print(len(tot_cfg_samples))
+            # TODO: this needs to be removed into some "eval suite" which you configure
+            # if cfg is not None: 
+            #     gen_tokens = gen_fn(variables, val_key)
+            #     tot_cfg_samples = sum((tokenizer.decode(t).split(',')[1:-1] for t in gen_tokens), start=[])
 
-            cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
-            log_dict["val/cfg_acc"] = cfg_acc
+            #     cfg_acc = sum([cfg.verify(s) for s in tot_cfg_samples]) / len(tot_cfg_samples)
+            #     log_dict["val/cfg_acc"] = cfg_acc
+            # else: # just sample some and print
+            #     gen_tokens = gen_fn(variables, val_key)
+            #     gen_samples = [tokenizer.decode(t) for t in gen_tokens]
+            #     print(gen_samples[:5])
 
             val_time = time.time() - t0_val
             log_dict["perf/val_time"] = val_time
@@ -157,10 +167,10 @@ def train(
 
         if step % save_freq == 0 and step > 0:
             if save_intermediate:
-                save_variables(variables, opt_state, grad_norm, step, path=f"runs/{run_name}/checkpoints/step_{step}.pkl")
-            save_variables(variables, opt_state, grad_norm, step, path=f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
+                save_variables(variables, opt_state, misc_metrics, step, path=f"runs/{run_name}/checkpoints/step_{step}.pkl")
+            save_variables(variables, opt_state, misc_metrics, step, path=f"runs/{run_name}/checkpoints/last.pkl")  # last checkpoint
 
-    save_variables(variables, opt_state, grad_norm, n_steps, path=f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
+    save_variables(variables, opt_state, misc_metrics, n_steps, path=f"runs/{run_name}/checkpoints/last.pkl")  # final checkpoint
 
 
 if __name__ == "__main__":
@@ -175,14 +185,21 @@ if __name__ == "__main__":
     with open(args.train_config) as f:
         train_config = yaml.safe_load(f)
 
-    cfg = CFG(rules_file=f"configs/cfg/{train_config['cfg_name']}.cfg")
-    train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"])
-    val_dataset, _ = get_dataset(train_config["val_dataset_path"])
+    cfg = None
+    if 'cfg_name' in train_config:
+        cfg = CFG(rules_file=f"configs/cfg/{train_config['cfg_name']}.cfg")
+        EOT_TOKEN = EOT_TOKEN_CFG
+        train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"], dataset_type="cfg")
+        val_dataset, _ = get_dataset(train_config["val_dataset_path"])
+    else:
+        EOT_TOKEN = EOT_TOKEN_NL
+        train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"], dataset_type="text")
+        val_dataset, _ = get_dataset(train_config["val_dataset_path"], dataset_type="text")
 
     with open(args.gpt_config) as f:
         gpt_config = yaml.safe_load(f)
         gpt_config["gen_batch_size"] = train_config["gen_batch_size"]
-        gpt_config["delim_token"] = tokenizer.encode(DELIM_TOKEN).item()
+        gpt_config["eot_token"] = tokenizer.encode(EOT_TOKEN).item()
         gpt_config["vocab_size"] = tokenizer.vocab_size
         gpt_config["dtype"] = getattr(jnp, gpt_config["dtype"], float)
 
