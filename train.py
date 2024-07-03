@@ -175,13 +175,17 @@ if __name__ == "__main__":
         val_dataset, _ = get_dataset(train_config["val_dataset_path"], dataset_type="text")
 
         with open(args.gpt_config) as f:
-            gpt_config = yaml.safe_load(f)
-            gpt_config["gen_batch_size"] = train_config["gen_batch_size"]
-            gpt_config["eot_token"] = tokenizer.encode(EOT_TOKEN).item()
-            gpt_config["vocab_size"] = tokenizer.vocab_size
-            gpt_config["dtype"] = getattr(jnp, gpt_config["dtype"], float)
+            gpt_config_base = yaml.safe_load(f)
+        gpt_config_base["gen_batch_size"] = train_config["gen_batch_size"]
+        gpt_config_base["eot_token"] = tokenizer.encode(EOT_TOKEN).item()
+        gpt_config_base["vocab_size"] = tokenizer.vocab_size
+        model_dtype = gpt_config_base.pop("dtype")
 
-        gpt_config = GPTConfig(**gpt_config)
+        gpt_config = GPTConfig(
+            dtype=getattr(jnp, model_dtype, float),
+            **gpt_config_base
+        )
+        gpt_config_base['dtype'] = model_dtype  # return so we can save
 
         with open(args.optimizer_config) as f:
             optimizer_config = yaml.safe_load(f)
@@ -196,25 +200,25 @@ if __name__ == "__main__":
 
         # save configs
         with open(f"runs/{args.run_name}/configs/gpt.yaml", "w") as f:
-            # save only python objects (float str int etc.)
-            # yaml.dump(gpt_config, f)
-            yaml.dump({k: v for k, v in gpt_config.__dict__.items() if isinstance(v, (float, int))}, f)
+            yaml.dump(gpt_config_base, f)
         with open(f"runs/{args.run_name}/configs/optimizer.yaml", "w") as f:
             yaml.dump(optimizer_config, f)
         with open(f"runs/{args.run_name}/configs/train.yaml", "w") as f:
             yaml.dump(train_config, f)
+
     else: # run does exist, read configs (ignores input configs)
         print(f"Resuming run in runs/{args.run_name}...")
         with open(f"runs/{args.run_name}/configs/gpt.yaml") as f:
             gpt_config = yaml.safe_load(f)
-            gpt_config = GPTConfig(**gpt_config)
-            print(gpt_config)
+            model_dtype = gpt_config.pop("dtype")
+            gpt_config = GPTConfig(
+                dtype=getattr(jnp, model_dtype, float),
+                **gpt_config
+            )
         with open(f"runs/{args.run_name}/configs/optimizer.yaml") as f:
             optimizer_config = yaml.safe_load(f)
         with open(f"runs/{args.run_name}/configs/train.yaml") as f:
             train_config = yaml.safe_load(f)
-
-        quit()
 
         optimizer, schedule = get_optimizer(**optimizer_config)
         train_dataset, tokenizer = get_dataset(train_config["train_dataset_path"], dataset_type="text")
