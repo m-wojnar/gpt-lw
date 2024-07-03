@@ -81,6 +81,6 @@ def load_pretrained_model(run_path, checkpoint_name="last_variables"):
     )
 
     model = GPT(gpt_config)
-    variables = load_variables(os.path.join(run_path, "checkpoints", checkpoint_name + ".pkl"))
+    variables = load_variables(os.path.join(run_path, "checkpoints", checkpoint_name + ".pkl"))[0]
 
     return model, variables

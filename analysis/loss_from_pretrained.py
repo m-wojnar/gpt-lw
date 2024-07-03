@@ -9,7 +9,8 @@ import optax
 from tqdm import tqdm
 from transformers import AutoTokenizer, FlaxAutoModelForCausalLM
 
-from gpt_lw.data import sample_batch
+from gpt_lw.data import sample_batch, TextTokenizer, get_dataset
+from gpt_lw.model_utils import load_pretrained_model, forward
 
 
 EOT_TOKEN_NL = "<|endoftext|>"
@@ -30,16 +31,24 @@ def load_text_data(dir="../text_dataset/wikipedia/", n_pages=1000):
 
 
 if __name__ == "__main__":
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    model = FlaxAutoModelForCausalLM.from_pretrained("gpt2")
-
-    text = EOT_TOKEN_NL.join(load_text_data())
-    batch_size, seq_len = 64, 1024
+    model_type = "gpt-lw"
+    batch_size, seq_len = 64, 512
     key = jax.random.PRNGKey(42)
 
-    all_tokens = tokenizer(text, return_tensors="jax").input_ids[0]
+    if model_type == "gpt2":
+        tokenizer = AutoTokenizer.from_pretrained("gpt2")
+        model = FlaxAutoModelForCausalLM.from_pretrained("gpt2")
+        text = EOT_TOKEN_NL.join(load_text_data())
+        all_tokens = tokenizer(text, return_tensors="jax").input_ids[0]
+
+        model_fn = jax.jit(lambda x: model(x).logits)
+    elif model_type == "gpt-lw":
+        all_tokens, tokenizer = get_dataset("../text_dataset/train_wikipedia.npy", dataset_type="text")
+        model, variables = load_pretrained_model("runs/debug")
+
+        model_fn = jax.jit(lambda x: forward(model, variables, key, x)[0])
+
     sample_fn = jax.jit(partial(sample_batch, all_tokens, batch_size, seq_len + 1))
-    model_fn = jax.jit(lambda x: model(x).logits)
 
     history = []
     n_steps = 1000
