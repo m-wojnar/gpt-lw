@@ -16,7 +16,7 @@ from gpt_lw.model_utils import load_pretrained_model, forward
 EOT_TOKEN_NL = "<|endoftext|>"
 
 
-def load_text_data(dir="../text_dataset/wikipedia/", n_pages=1000):
+def load_text_data(dir="text_dataset/wikipedia/", n_pages=1000):
     parquet_files = glob.glob(os.path.join(dir, "**", "*.parquet"), recursive=True)
     all_text = []
 
