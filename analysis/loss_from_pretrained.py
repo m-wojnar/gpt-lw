@@ -38,7 +38,7 @@ if __name__ == "__main__":
     if model_type == "gpt2":
         tokenizer = AutoTokenizer.from_pretrained("gpt2")
         model = FlaxAutoModelForCausalLM.from_pretrained("gpt2")
-        text = EOT_TOKEN_NL.join(load_text_data())
+        text = f' {EOT_TOKEN_NL}'.join(load_text_data())
         all_tokens = tokenizer(text, return_tensors="jax").input_ids[0]
 
         model_fn = jax.jit(lambda x, k: model(x).logits)
