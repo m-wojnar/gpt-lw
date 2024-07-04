@@ -32,7 +32,9 @@ class SimpleTokenizer(Tokenizer):
 
 class TextTokenizer(Tokenizer):
     def __init__(self):
-        self.enc = tokenmonster.load("english-2048-clean-v1")
+        # self.enc = tokenmonster.load("english-2048-clean-v1")
+        self.enc = tokenmonster.load("llama")
+        self.enc.add_special_token("\n\n")  # sort of like EOT but for paragraphs
         self.enc.add_special_token("<|endoftext|>")
         self.vocab_size = self.enc.vocab_size
 
