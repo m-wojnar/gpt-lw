@@ -31,7 +31,7 @@ def load_text_data(dir="text_dataset/wikipedia/", n_pages=1000):
 
 
 if __name__ == "__main__":
-    model_type = "gpt2"
+    model_type = "gpt-lw"
     batch_size, seq_len = 64, 512
     key = jax.random.PRNGKey(42)
 
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         model_fn = jax.jit(lambda x, k: model(x).logits)
     elif model_type == "gpt-lw":
         all_tokens, tokenizer = get_dataset("text_dataset/train_wikipedia.npy", dataset_type="text")
-        model, variables = load_pretrained_model("runs/tm_wiki_mini")
+        model, variables = load_pretrained_model("runs/llama_wiki_mini")
 
         model_fn = jax.jit(lambda x, k: forward(model, variables, k, x)[0])
 
