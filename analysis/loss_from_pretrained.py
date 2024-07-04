@@ -31,7 +31,7 @@ def load_text_data(dir="../text_dataset/wikipedia/", n_pages=1000):
 
 
 if __name__ == "__main__":
-    model_type = "gpt-lw"
+    model_type = "gpt2"
     batch_size, seq_len = 64, 512
     key = jax.random.PRNGKey(42)
 
