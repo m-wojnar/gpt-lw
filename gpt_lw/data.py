@@ -36,7 +36,8 @@ class TextTokenizer(Tokenizer):
         self.enc = tokenmonster.load("llama")
         self.enc.add_special_token("\n\n")  # sort of like EOT but for paragraphs
         self.enc.add_special_token("<|endoftext|>")
-        self.vocab_size = self.enc.vocab_size
+        # self.vocab_size = self.enc.vocab_size
+        self.vocab_size = 32000  # above does not work (nans in loss)
 
     def encode(self, text: str) -> Array:
         return jnp.array(self.enc.tokenize(text))
