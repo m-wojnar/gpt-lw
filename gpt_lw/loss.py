@@ -41,7 +41,9 @@ def get_weighted_loss(model, weighting, delim_token=-1):
     elif os.path.exists(weighting): # passed through tensor
         weights = jnp.load(weighting)
         def tensor_relpos(x):
-            relative_positions = compute_relative_positions(x, delim_token=delim_token)
+            # relative_positions = compute_relative_positions(x, delim_token=delim_token)
+            # fake relative pos, just arange n_rows times
+            relative_positions = jnp.arange(x.shape[1]).reshape(1, -1).repeat(x.shape[0], axis=0)
             return weights[relative_positions]
         weight_fn = tensor_relpos
 
