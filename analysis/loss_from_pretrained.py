@@ -56,7 +56,7 @@ if __name__ == "__main__":
     sample_fn = jax.jit(partial(sample_batch, all_tokens, batch_size, seq_len + 1))
 
     history = []
-    n_steps = 5000
+    n_steps = 1000
 
     for i in tqdm(range(n_steps)):
         key, batch_key, model_key = jax.random.split(key, 3)
