@@ -35,6 +35,7 @@ def load_text_data(dir="../text_dataset/wikipedia/", n_pages=1000):
 if __name__ == "__main__":
     model_type = "gpt-lw"
     batch_size, seq_len = 1, 512
+    compute_grad_norm = True
     key = jax.random.PRNGKey(42)
 
     if model_type == "gpt2":
@@ -50,6 +51,7 @@ if __name__ == "__main__":
 
         loss_fn = get_weighted_loss(model, "unweighted")
         grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn, batch_size))
+        model_fn = jax.jit(lambda x, k: forward(model, variables, k, x)[0])
 
     sample_fn = jax.jit(partial(sample_batch, all_tokens, batch_size, seq_len + 1))
 
@@ -60,9 +62,9 @@ if __name__ == "__main__":
         key, batch_key, model_key = jax.random.split(key, 3)
         xt, xtp1 = sample_fn(batch_key)
 
-        if model_type == "gpt-lw":
+        if compute_grad_norm:
+            assert model_type == "gpt-lw"
             loss, grads = grad_norm_fn(variables, model_key, xt, xtp1)
-            print(grads)
             history.append((xt, xtp1, loss, grads))
         else:
             logits = model_fn(xt, model_key)
