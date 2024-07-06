@@ -30,7 +30,7 @@ def compute_relative_positions(tokens, delim_token):
 def get_weighted_loss(model, weighting, delim_token=-1):
     if weighting == "unweighted":
         def unweighted(x):
-            return 1.0
+            return jnp.ones_like(x)
         weight_fn = unweighted
     elif weighting == "negexp_relpos":
         def negexp_relpos(x):
@@ -50,7 +50,9 @@ def get_weighted_loss(model, weighting, delim_token=-1):
     def weighted_nt(variables, key, xt, xtp1):
         logits, state = forward(model, variables, key, xt)
         token_loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
+
         weights = weight_fn(xt)
+        weights *= model.config.seq_len / weights.sum(axis=1, keepdims=True)
 
         weighted_loss = token_loss * weights
         return weighted_loss, state
