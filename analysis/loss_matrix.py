@@ -26,7 +26,7 @@ def compute_mean_loss_rp_matrix(Xs, Ls, vocab_size):
 
 if __name__ == "__main__":
     # Load the data from the .npz file
-    analysis_dir = "runs/tm_wiki_mini/analysis"
+    analysis_dir = "runs/llama_wiki_mini/analysis"
     data = np.load(os.path.join(analysis_dir, "history.npz"))
     tok = TextTokenizer()
 
