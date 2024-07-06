@@ -119,7 +119,7 @@ def train(
 
         if step % val_freq == 0:
             t0_val = time.time()
-            val_loss, val_cce = 0.0, 0.0
+            val_loss, val_cce, val_gn = 0.0, 0.0, 0.0
 
             for i in range(n_val_steps):
                 loss_key, eval_key, grad_key, val_batch_key, grad_batch_key, val_key = jax.random.split(val_key, 6)
@@ -133,9 +133,11 @@ def train(
                 xt, xtp1 = grad_sample_fn(grad_batch_key)
                 token_loss, grads = grad_norm_fn(variables, grad_key, xt, xtp1)
                 misc_metrics.append((xt, xtp1, token_loss, grads, step))
+                val_gn += grads.mean().item()
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
+            log_dict["val/gn"] = val_gn / n_val_steps
 
             val_time = time.time() - t0_val
             log_dict["perf/val_time"] = val_time
