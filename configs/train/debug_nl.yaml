@@ -1,8 +1,6 @@
 train_dataset_path: "text_dataset/train_wikipedia.npy"
 val_dataset_path: "text_dataset/val_wikipedia.npy"
 batch_size: 4
-gen_batch_size: 4
-grad_batch_size: 2
 n_steps: 10000
 seed: 42
 save_freq: 100

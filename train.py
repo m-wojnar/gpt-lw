@@ -100,7 +100,7 @@ def train(
     train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
     val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len + 1))
     grad_sample_fn = jax.jit(partial(sample_batch, train_dataset, grad_batch_size, config.seq_len + 1))
-    gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
+    gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, batch_size, method="gen")[0])
 
     # train loop
     for step in range(init_step, n_steps):
@@ -180,7 +180,6 @@ if __name__ == "__main__":
 
         with open(args.gpt_config) as f:
             gpt_config_base = yaml.safe_load(f)
-        gpt_config_base["gen_batch_size"] = train_config["gen_batch_size"]
         gpt_config_base["eot_token"] = tokenizer.encode(EOT_TOKEN).item()
         gpt_config_base["vocab_size"] = tokenizer.vocab_size
         model_dtype = gpt_config_base.pop("dtype")
