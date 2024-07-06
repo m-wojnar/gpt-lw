@@ -12,11 +12,13 @@ from transformers import AutoTokenizer, FlaxAutoModelForCausalLM
 from gpt_lw.data import sample_batch, get_dataset
 from gpt_lw.model_utils import load_pretrained_model, forward
 
+from gpt_lw.grad_utils import grad_norm_per_token
+from gpt_lw.loss import get_weighted_loss
 
 EOT_TOKEN_NL = "<|endoftext|>"
 
 
-def load_text_data(dir="text_dataset/wikipedia/", n_pages=1000):
+def load_text_data(dir="../text_dataset/wikipedia/", n_pages=1000):
     parquet_files = glob.glob(os.path.join(dir, "**", "*.parquet"), recursive=True)
     all_text = []
 
@@ -32,34 +34,46 @@ def load_text_data(dir="text_dataset/wikipedia/", n_pages=1000):
 
 if __name__ == "__main__":
     model_type = "gpt-lw"
-    batch_size, seq_len = 64, 512
+    batch_size, seq_len = 1, 512
+    compute_grad_norm = True
     key = jax.random.PRNGKey(42)
 
     if model_type == "gpt2":
         tokenizer = AutoTokenizer.from_pretrained("gpt2")
         model = FlaxAutoModelForCausalLM.from_pretrained("gpt2")
-        text = f' {EOT_TOKEN_NL}'.join(load_text_data())
+        text = EOT_TOKEN_NL.join(load_text_data())
         all_tokens = tokenizer(text, return_tensors="jax").input_ids[0]
 
         model_fn = jax.jit(lambda x, k: model(x).logits)
     elif model_type == "gpt-lw":
         all_tokens, tokenizer = get_dataset("text_dataset/train_wikipedia.npy", dataset_type="text")
-        model, variables = load_pretrained_model("runs/llama_wiki_mini")
+        model, variables = load_pretrained_model("runs/llama_wiki_mini_LR_2p9en3")
 
+        loss_fn = get_weighted_loss(model, "unweighted")
+        grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn, batch_size))
         model_fn = jax.jit(lambda x, k: forward(model, variables, k, x)[0])
 
     sample_fn = jax.jit(partial(sample_batch, all_tokens, batch_size, seq_len + 1))
 
     history = []
-    n_steps = 1000
+    n_steps = 5000
 
     for i in tqdm(range(n_steps)):
         key, batch_key, model_key = jax.random.split(key, 3)
         xt, xtp1 = sample_fn(batch_key)
-        logits = model_fn(xt, model_key)
-        loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
-        history.append((xt, xtp1, loss))
 
-    xt_history, xtp1_history, loss_history = zip(*history)
-    xt_history, xtp1_history, loss_history = jnp.concatenate(xt_history), jnp.concatenate(xtp1_history), jnp.concatenate(loss_history)
-    jnp.savez("history.npz", xt=xt_history, xtp1=xtp1_history, loss=loss_history)
+        if compute_grad_norm:
+            assert model_type == "gpt-lw"
+            loss, grads = grad_norm_fn(variables, model_key, xt, xtp1)
+            history.append((xt, xtp1, loss, grads))
+        else:
+            logits = model_fn(xt, model_key)
+            loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
+            history.append((xt, xtp1, loss, jnp.zeros_like(loss)))
+
+
+    xt_history, xtp1_history, loss_history, grad_history = zip(*history)
+    xt_history, xtp1_history, loss_history, grad_history = jnp.concatenate(xt_history), jnp.concatenate(xtp1_history), jnp.concatenate(loss_history), jnp.concatenate(grad_history)
+    jnp.savez("history.npz", xt=xt_history, xtp1=xtp1_history, loss=loss_history, grad=grad_history)
+
+
