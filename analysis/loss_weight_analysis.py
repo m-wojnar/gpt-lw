@@ -5,20 +5,6 @@ from matplotlib import pyplot as plt
 from scipy.optimize import curve_fit
 
 
-def convert_to_pdist(avg_loss_per_token):
-    weights = avg_loss_per_token
-    weights = np.array(weights)
-
-    # normalize weights so its prob dist
-    weights = weights / np.sum(weights)
-    # invert so higher loss -> lower weight
-    weights = 1.0 - weights
-    weights = weights / np.sum(weights)
-
-    # integral = seq_len
-    weights = weights * SEQ_LEN
-    return weights
-
 def convert_to_max_minus_loss(avg_loss_per_token, max_loss, seq_len):
     weights = max_loss - avg_loss_per_token
     weights = weights / np.sum(weights)
