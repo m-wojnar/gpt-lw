@@ -144,7 +144,7 @@ def train(
                 token_gn_accum += grads
                 token_cce_accum += token_cce
 
-                misc_metrics.append((xt, xtp1, token_loss, grads, step))
+                misc_metrics.append((xt, xtp1, token_loss, token_cce, grads, step))
                 val_gn += grads.mean().item()
 
             token_loss_accum /= n_val_steps
