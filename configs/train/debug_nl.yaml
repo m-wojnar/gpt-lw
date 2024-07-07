@@ -9,3 +9,4 @@ val_freq: 100
 n_val_steps: 10
 log_freq: 100
 logging: "stdout"
+debug: true

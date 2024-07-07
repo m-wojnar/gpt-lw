@@ -254,15 +254,16 @@ if __name__ == "__main__":
         if args.checkpoint_path is None:  # manual path has top priority
             args.checkpoint_path = f"runs/{args.run_name}/checkpoints/last"
 
-    train(
-        run_name=args.run_name,
-        config=gpt_config,
-        train_dataset=train_dataset,
-        val_dataset=val_dataset,
-        tokenizer=tokenizer,
-        optimizer=optimizer,
-        schedule=schedule,
-        loss_weighting=args.loss_weighting,
-        checkpoint_path=args.checkpoint_path,
-        **train_config
-    )
+    with jax.disable_jit(train_config['debug']):
+        train(
+            run_name=args.run_name,
+            config=gpt_config,
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
+            tokenizer=tokenizer,
+            optimizer=optimizer,
+            schedule=schedule,
+            loss_weighting=args.loss_weighting,
+            checkpoint_path=args.checkpoint_path,
+            **train_config
+        )
