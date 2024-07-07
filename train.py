@@ -194,7 +194,7 @@ if __name__ == "__main__":
     args.add_argument("--loss_weighting", type=str, default="unweighted")
     args = args.parse_args()
 
-    if not os.path.exists(f"runs/{args.run_name}"):  # run does not exist, parse input configs
+    if not os.path.exists(f"runs/{args.run_name}/checkpoints/last_variables.pkl"):  # run does not exist, parse input configs
         print(f"Starting new run in runs/{args.run_name}...")
         with open(args.train_config) as f:
             train_config = yaml.safe_load(f)
@@ -222,9 +222,9 @@ if __name__ == "__main__":
         optimizer, schedule = get_optimizer(**optimizer_config)
 
         # create dir structure
-        os.makedirs(f"runs/{args.run_name}/checkpoints")
-        os.makedirs(f"runs/{args.run_name}/configs")
-        os.makedirs(f"runs/{args.run_name}/analysis")
+        os.makedirs(f"runs/{args.run_name}/checkpoints", exist_ok=True)
+        os.makedirs(f"runs/{args.run_name}/configs", exist_ok=True)
+        os.makedirs(f"runs/{args.run_name}/analysis", exist_ok=True)
 
         # save configs
         with open(f"runs/{args.run_name}/configs/gpt.yaml", "w") as f:
