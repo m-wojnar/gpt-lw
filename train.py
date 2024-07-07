@@ -94,6 +94,7 @@ def train(
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
     grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn, batch_size))
+    per_token_cce = jax.jit(eval_fn)
     step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
     loss_fn = jax.jit(mean_loss_fn(loss_fn))
     eval_fn = jax.jit(mean_loss_fn(eval_fn))
@@ -137,7 +138,7 @@ def train(
 
                 xt, xtp1 = grad_sample_fn(grad_batch_key)
                 token_loss, grads = grad_norm_fn(variables, grad_key, xt, xtp1)
-                token_cce, _ = eval_fn(variables, grad_key, xt, xtp1)
+                token_cce, _ = per_token_cce(variables, grad_key, xt, xtp1)
 
                 token_loss_accum += token_loss
                 token_gn_accum += grads
@@ -154,8 +155,8 @@ def train(
             points = [0] + [2**p for p in range(math.floor(math.log2(token_loss_accum.shape[1])) + 1)]
             for p in points:
                 log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[0, p].item()
-                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[0, p].item()
                 log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[0, p].item()
+                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[0, p].item()
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
