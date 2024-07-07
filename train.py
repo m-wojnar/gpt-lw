@@ -94,8 +94,9 @@ def train(
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
     grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
-    per_token_cce = jax.jit(eval_fn)
     step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
+    per_token_loss_fn = jax.jit(loss_fn)
+    per_token_cce_fn = jax.jit(eval_fn)
     loss_fn = jax.jit(mean_loss_fn(loss_fn))
     eval_fn = jax.jit(mean_loss_fn(eval_fn))
     train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
@@ -122,9 +123,9 @@ def train(
             t0_val = time.time()
             val_loss, val_cce, val_gn = 0.0, 0.0, 0.0
 
-            token_gn_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
-            token_loss_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
-            token_cce_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
+            token_gn_accum = jnp.zeros_like(xt)
+            token_loss_accum = jnp.zeros_like(xt)
+            token_cce_accum = jnp.zeros_like(xt)
 
             for i in range(n_val_steps):
                 loss_key, eval_key, grad_key, val_batch_key, grad_batch_key, val_key = jax.random.split(val_key, 6)
@@ -136,8 +137,9 @@ def train(
                 val_cce += val_cce_t.item()
 
                 xt, xtp1 = train_sample_fn(grad_batch_key)
-                token_loss, grads = grad_norm_fn(variables, grad_key, xt, xtp1)
-                token_cce, _ = per_token_cce(variables, grad_key, xt, xtp1)
+                grads = grad_norm_fn(variables, grad_key, xt, xtp1)
+                token_loss, _ = per_token_loss_fn(variables, grad_key, xt, xtp1)
+                token_cce, _ = per_token_cce_fn(variables, grad_key, xt, xtp1)
 
                 token_loss_accum += token_loss
                 token_gn_accum += grads
