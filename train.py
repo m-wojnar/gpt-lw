@@ -126,8 +126,8 @@ def train(
             val_loss, val_cce, val_gn = 0.0, 0.0, 0.0
 
             token_gn_accum = jnp.zeros((gn_batch_size, config.seq_len))
-            token_loss_accum = jnp.zeros((batch_size, config.seq_len))
-            token_cce_accum = jnp.zeros((batch_size, config.seq_len))
+            token_loss_accum = jnp.zeros((gn_batch_size, config.seq_len))
+            token_cce_accum = jnp.zeros((gn_batch_size, config.seq_len))
 
             for i in range(n_val_steps):
                 loss_key, eval_key, grad_key, val_batch_key, grad_batch_key, val_key = jax.random.split(val_key, 6)
