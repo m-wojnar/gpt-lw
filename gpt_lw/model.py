@@ -15,7 +15,6 @@ class GPTConfig:
     num_heads: int
     num_layers: int
     drop_rate: float
-    gen_batch_size: int
     eot_token: int
     dtype: jnp.dtype
     embed_init: nn.initializers.Initializer = nn.initializers.variance_scaling(1.0, 'fan_in', 'normal', out_axis=0)
@@ -110,7 +109,7 @@ class GPT(nn.Module):
 
     # NOTE: not adding any fancy logit wrappers (top_k, top_p, etc.) here since
     # vocab size is probably too small for it to be relevant
-    def gen(self):
+    def gen(self, batch_size):
         def scan_fn(gpt, carry):
             prev_token, key = carry
             key, cat_key = jax.random.split(key)
@@ -120,6 +119,6 @@ class GPT(nn.Module):
             return (next_token, key), next_token
 
         scan = nn.scan(scan_fn, variable_broadcast='params', variable_carry='cache', out_axes=1, length=self.config.seq_len)
-        first_token = jnp.ones((self.config.gen_batch_size, 1), dtype=int) * self.config.eot_token
+        first_token = jnp.ones((batch_size, 1), dtype=int) * self.config.eot_token
         _, generated = scan(self, (first_token, self.make_rng('gpt')))
         return generated.squeeze()

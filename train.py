@@ -1,4 +1,5 @@
 import os
+import math
 import time
 from argparse import ArgumentParser
 from functools import partial
@@ -31,7 +32,6 @@ def train(
         schedule: optax.Schedule,
         loss_weighting: str,
         batch_size: int,
-        grad_batch_size: int,
         n_steps: int,
         seed: int,
         save_freq: int,
@@ -94,13 +94,13 @@ def train(
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
     grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
+    per_token_cce = jax.jit(eval_fn)
     step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
     loss_fn = jax.jit(mean_loss_fn(loss_fn))
     eval_fn = jax.jit(mean_loss_fn(eval_fn))
     train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
     val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len + 1))
-    grad_sample_fn = jax.jit(partial(sample_batch, train_dataset, grad_batch_size, config.seq_len + 1))
-    gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, method="gen")[0])
+    gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, batch_size, method="gen")[0])
 
     # train loop
     for step in range(init_step, n_steps):
@@ -120,7 +120,11 @@ def train(
 
         if step % val_freq == 0:
             t0_val = time.time()
-            val_loss, val_cce = 0.0, 0.0
+            val_loss, val_cce, val_gn = 0.0, 0.0, 0.0
+
+            token_gn_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
+            token_loss_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
+            token_cce_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
 
             for i in range(n_val_steps):
                 loss_key, eval_key, grad_key, val_batch_key, grad_batch_key, val_key = jax.random.split(val_key, 6)
@@ -131,12 +135,31 @@ def train(
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
 
-                xt, xtp1 = grad_sample_fn(grad_batch_key)
+                xt, xtp1 = train_sample_fn(grad_batch_key)
                 token_loss, grads = grad_norm_fn(variables, grad_key, xt, xtp1)
-                misc_metrics.append((xt, xtp1, token_loss, grads, step))
+                token_cce, _ = per_token_cce(variables, grad_key, xt, xtp1)
+
+                token_loss_accum += token_loss
+                token_gn_accum += grads
+                token_cce_accum += token_cce
+
+                misc_metrics.append((xt, xtp1, token_loss, token_cce, grads, step))
+                val_gn += grads.mean().item()
+
+            token_loss_accum /= n_val_steps
+            token_gn_accum /= n_val_steps
+            token_cce_accum /= n_val_steps
+
+            # log log-spaced points
+            points = [0] + [2**p for p in range(math.floor(math.log2(token_loss_accum.shape[1])) + 1)]
+            for p in points:
+                log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[0, p].item()
+                log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[0, p].item()
+                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[0, p].item()
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
+            log_dict["val/gn"] = val_gn / n_val_steps
 
             val_time = time.time() - t0_val
             log_dict["perf/val_time"] = val_time
@@ -180,7 +203,6 @@ if __name__ == "__main__":
 
         with open(args.gpt_config) as f:
             gpt_config_base = yaml.safe_load(f)
-        gpt_config_base["gen_batch_size"] = train_config["gen_batch_size"]
         gpt_config_base["eot_token"] = tokenizer.encode(EOT_TOKEN).item()
         gpt_config_base["vocab_size"] = tokenizer.vocab_size
         model_dtype = gpt_config_base.pop("dtype")
@@ -231,15 +253,16 @@ if __name__ == "__main__":
         if args.checkpoint_path is None:  # manual path has top priority
             args.checkpoint_path = f"runs/{args.run_name}/checkpoints/last"
 
-    train(
-        run_name=args.run_name,
-        config=gpt_config,
-        train_dataset=train_dataset,
-        val_dataset=val_dataset,
-        tokenizer=tokenizer,
-        optimizer=optimizer,
-        schedule=schedule,
-        loss_weighting=args.loss_weighting,
-        checkpoint_path=args.checkpoint_path,
-        **train_config
-    )
+    with jax.disable_jit(train_config['debug']):
+        train(
+            run_name=args.run_name,
+            config=gpt_config,
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
+            tokenizer=tokenizer,
+            optimizer=optimizer,
+            schedule=schedule,
+            loss_weighting=args.loss_weighting,
+            checkpoint_path=args.checkpoint_path,
+            **train_config
+        )

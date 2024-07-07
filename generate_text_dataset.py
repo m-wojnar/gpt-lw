@@ -1,4 +1,5 @@
 import os
+import re
 import glob
 import random
 
@@ -14,8 +15,8 @@ if __name__ == "__main__":
     wikipedia_dir = "text_dataset/wikipedia/"
     dataset_name = "wikipedia"
     shuffle = True
-    train_n_pages = 10000
-    val_n_pages = 10
+    train_n_pages = 30000
+    val_n_pages = 200
 
     parquet_files = glob.glob(os.path.join(wikipedia_dir, "*.parquet"))
 
@@ -25,14 +26,16 @@ if __name__ == "__main__":
         all_text += df["text"].tolist()
 
     if shuffle:
-        random.shuffle(all_text)
+        random.Random(42).shuffle(all_text)
 
     all_pages = all_text[:train_n_pages + val_n_pages]
+    all_pages = [re.sub(r'(?<!\s)\n\n', ' \n\n', page) for page in all_pages]
 
     tokenizer = TextTokenizer()
 
-    delim_enc = tokenizer.encode(EOT_TOKEN_NL)
-    pages_enc = [tokenizer.encode(page + EOT_TOKEN_NL) for page in tqdm(all_pages)]
+    eot_token = f' {EOT_TOKEN_NL}'
+    delim_enc = tokenizer.encode(eot_token)
+    pages_enc = [tokenizer.encode(page + eot_token) for page in tqdm(all_pages)]
 
     train_pages_enc = [delim_enc] + pages_enc[:train_n_pages]
     val_pages_enc = [delim_enc] + pages_enc[train_n_pages:train_n_pages + val_n_pages]
