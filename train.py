@@ -32,6 +32,7 @@ def train(
         schedule: optax.Schedule,
         loss_weighting: str,
         batch_size: int,
+        gn_batch_size: int,
         n_steps: int,
         seed: int,
         save_freq: int,
@@ -93,7 +94,7 @@ def train(
     loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item())
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
-    grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
+    grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn, gn_batch_size))
     step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
     per_token_loss_fn = jax.jit(loss_fn)
     per_token_cce_fn = jax.jit(eval_fn)
@@ -101,6 +102,7 @@ def train(
     eval_fn = jax.jit(mean_loss_fn(eval_fn))
     train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
     val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len + 1))
+    gn_sample_fn = jax.jit(partial(sample_batch, train_dataset, gn_batch_size, config.seq_len + 1))
     gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, batch_size, method="gen")[0])
 
     # train loop
@@ -136,7 +138,7 @@ def train(
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
 
-                xt, xtp1 = train_sample_fn(grad_batch_key)
+                xt, xtp1 = gn_sample_fn(grad_batch_key)
                 grads = grad_norm_fn(variables, grad_key, xt, xtp1)
                 token_loss, _ = per_token_loss_fn(variables, grad_key, xt, xtp1)
                 token_cce, _ = per_token_cce_fn(variables, grad_key, xt, xtp1)

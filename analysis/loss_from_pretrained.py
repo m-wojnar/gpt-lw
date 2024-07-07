@@ -34,7 +34,8 @@ def load_text_data(dir="../text_dataset/wikipedia/", n_pages=1000):
 
 if __name__ == "__main__":
     model_type = "gpt-lw"
-    batch_size, seq_len = 1, 512
+    batch_size, seq_len = 64, 512
+    gn_batch_size = 16
     compute_grad_norm = True
     key = jax.random.PRNGKey(42)
 
@@ -50,7 +51,7 @@ if __name__ == "__main__":
         model, variables = load_pretrained_model("runs/llama_wiki_mini_LR_2p9en3")
 
         loss_fn = get_weighted_loss(model, "unweighted")
-        grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn, batch_size))
+        grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn, gn_batch_size))
         model_fn = jax.jit(lambda x, k: forward(model, variables, k, x)[0])
 
     sample_fn = jax.jit(partial(sample_batch, all_tokens, batch_size, seq_len + 1))
