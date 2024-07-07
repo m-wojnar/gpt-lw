@@ -26,7 +26,7 @@ if __name__ == "__main__":
         all_text += df["text"].tolist()
 
     if shuffle:
-        random.shuffle(all_text)
+        random.Random(42).shuffle(all_text)
 
     all_pages = all_text[:train_n_pages + val_n_pages]
     all_pages = [re.sub(r'(?<!\s)\n\n', ' \n\n', page) for page in all_pages]
