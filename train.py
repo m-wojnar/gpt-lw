@@ -124,6 +124,7 @@ def train(
 
             token_gn_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
             token_loss_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
+            token_cce_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
 
             for i in range(n_val_steps):
                 loss_key, eval_key, grad_key, val_batch_key, grad_batch_key, val_key = jax.random.split(val_key, 6)
@@ -136,21 +137,25 @@ def train(
 
                 xt, xtp1 = grad_sample_fn(grad_batch_key)
                 token_loss, grads = grad_norm_fn(variables, grad_key, xt, xtp1)
+                token_cce, _ = eval_fn(variables, grad_key, xt, xtp1)
 
                 token_loss_accum += token_loss
                 token_gn_accum += grads
+                token_cce_accum += token_cce
 
                 misc_metrics.append((xt, xtp1, token_loss, grads, step))
                 val_gn += grads.mean().item()
 
             token_loss_accum /= n_val_steps
             token_gn_accum /= n_val_steps
+            token_cce_accum /= n_val_steps
 
             # log log-spaced points
             points = [0] + [2**p for p in range(math.floor(math.log2(token_loss_accum.shape[1])) + 1)]
             for p in points:
                 log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[0, p].item()
                 log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[0, p].item()
+                log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[0, p].item()
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
