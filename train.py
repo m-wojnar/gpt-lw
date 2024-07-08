@@ -16,7 +16,7 @@ from cfg_dataset.cfg import CFG
 from generate_cfg_dataset import EOT_TOKEN_CFG
 from generate_text_dataset import EOT_TOKEN_NL
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
-from gpt_lw.grad_utils import grad_norm_per_token
+from gpt_lw.grad_utils import grad_norm, grad_norm_per_token
 from gpt_lw.loss import get_weighted_loss
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_train_state, load_train_state, forward
 from gpt_lw.model import GPT, GPTConfig
@@ -94,7 +94,8 @@ def train(
     loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item())
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
-    grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn, gn_batch_size))
+    per_token_gn_fn = jax.jit(partial(grad_norm_per_token, loss_fn, gn_batch_size))
+    gn_fn = jax.jit(partial(grad_norm, mean_loss_fn(loss_fn)))
     step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
     per_token_loss_fn = jax.jit(loss_fn)
     per_token_cce_fn = jax.jit(eval_fn)
@@ -123,7 +124,7 @@ def train(
 
         if step % val_freq == 0:
             t0_val = time.time()
-            val_loss, val_cce, val_gn = 0.0, 0.0, 0.0
+            val_loss, val_cce, val_mean_token_gn, val_global_gn = 0.0, 0.0, 0.0, 0.0
 
             token_gn_accum = jnp.zeros((gn_batch_size, config.seq_len))
             token_loss_accum = jnp.zeros((gn_batch_size, config.seq_len))
@@ -139,16 +140,18 @@ def train(
                 val_cce += val_cce_t.item()
 
                 xt, xtp1 = gn_sample_fn(grad_batch_key)
-                grads = grad_norm_fn(variables, grad_key, xt, xtp1)
+                grad_norms = per_token_gn_fn(variables, grad_key, xt, xtp1)
+                global_gn = gn_fn(variables, grad_key, xt, xtp1)
                 token_loss, _ = per_token_loss_fn(variables, grad_key, xt, xtp1)
                 token_cce, _ = per_token_cce_fn(variables, grad_key, xt, xtp1)
 
                 token_loss_accum += token_loss
-                token_gn_accum += grads
+                token_gn_accum += grad_norms
                 token_cce_accum += token_cce
+                val_mean_token_gn += grad_norms.mean().item()
+                val_global_gn += global_gn.item()
 
-                misc_metrics.append((xt, xtp1, token_loss, token_cce, grads, step))
-                val_gn += grads.mean().item()
+                misc_metrics.append((xt, xtp1, token_loss, token_cce, grad_norms, step))
 
             token_loss_accum /= n_val_steps
             token_gn_accum /= n_val_steps
@@ -157,13 +160,14 @@ def train(
             # log log-spaced points
             points = [0] + [2**p for p in range(math.floor(math.log2(token_loss_accum.shape[1])) + 1)]
             for p in points:
-                log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[:, p].mean(axis=0).item()
-                log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[:, p].mean(axis=0).item()
-                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[:, p].mean(axis=0).item()
+                log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[:, p].mean().item()
+                log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[:, p].mean().item()
+                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[:, p].mean().item()
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
-            log_dict["val/gn"] = val_gn / n_val_steps
+            log_dict["val/mean_token_gn"] = val_mean_token_gn / n_val_steps
+            log_dict["val/global_gn"] = val_global_gn / n_val_steps
 
             val_time = time.time() - t0_val
             log_dict["perf/val_time"] = val_time
