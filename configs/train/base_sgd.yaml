@@ -1,0 +1,13 @@
+train_dataset_path: "text_dataset/train_wikipedia.npy"
+val_dataset_path: "text_dataset/val_wikipedia.npy"
+batch_size: 512
+gn_batch_size: 16
+n_steps: 100000
+seed: 42
+save_freq: 1000
+save_intermediate: false
+val_freq: 1000
+n_val_steps: 10
+log_freq: 500
+logging: "wandb"
+debug: false
