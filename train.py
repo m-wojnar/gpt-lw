@@ -157,9 +157,9 @@ def train(
             # log log-spaced points
             points = [0] + [2**p for p in range(math.floor(math.log2(token_loss_accum.shape[1])) + 1)]
             for p in points:
-                log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[0, p].item()
-                log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[0, p].item()
-                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[0, p].item()
+                log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[:, p].mean(axis=0).item()
+                log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[:, p].mean(axis=0).item()
+                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[:, p].mean(axis=0).item()
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
