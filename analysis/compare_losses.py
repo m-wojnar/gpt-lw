@@ -12,7 +12,7 @@ if __name__ == '__main__':
         'llama_wiki_mini_short_rel', 'llama_wiki_mini_short_rel_4', 'llama_wiki_mini_short_rel_8',
         'llama_wiki_mini_short_rel_nn', 'llama_wiki_mini_short_abs_random'
     ]:
-        w_name = weighted_model.split('_')[4:]
+        w_name = '_'.join(weighted_model.split('_')[4:])
 
         unw_history = jnp.load(f'{unweighted_model}_history.npz')
         unw_xtp1, unw_loss = jnp.asarray(unw_history['xtp1']), jnp.asarray(unw_history['loss'])

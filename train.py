@@ -124,7 +124,7 @@ def train(
 
         if step % val_freq == 0:
             t0_val = time.time()
-            val_loss, val_cce, val_mean_token_gn, val_global_gn = 0.0, 0.0, 0.0, 0.0
+            val_loss, val_cce, val_context_cce, val_mean_token_gn, val_global_gn = 0.0, 0.0, 0.0, 0.0, 0.0
 
             token_gn_accum = jnp.zeros((gn_batch_size, config.seq_len))
             token_loss_accum = jnp.zeros((gn_batch_size, config.seq_len))
@@ -136,8 +136,10 @@ def train(
                 xt, xtp1 = val_sample_fn(val_batch_key)
                 val_loss_t, _ = loss_fn(variables, loss_key, xt, xtp1)
                 val_cce_t, _ = eval_fn(variables, eval_key, xt, xtp1)
+                val_context_cce_t, _ = eval_fn(variables, eval_key, xt[:, config.seq_len // 2:], xtp1[:, config.seq_len // 2:])
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
+                val_context_cce += val_context_cce_t.item()
 
                 xt, xtp1 = gn_sample_fn(grad_batch_key)
                 grad_norms = per_token_gn_fn(variables, grad_key, xt, xtp1)
@@ -166,6 +168,7 @@ def train(
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
+            log_dict["val/context_cce"] = val_context_cce / n_val_steps
             log_dict["val/mean_token_gn"] = val_mean_token_gn / n_val_steps
             log_dict["val/global_gn"] = val_global_gn / n_val_steps
 
