@@ -8,13 +8,30 @@ from cloudpickle import cloudpickle
 from gpt_lw.model import GPT, GPTConfig
 
 
-def get_optimizer(lr, b1, b2, eps, weight_decay, warmup_pct, n_steps, div_factor, final_div_factor, lr_schedule="constant"):
+def get_optimizer(
+        optimizer,
+        lr,
+        b1=0.9,
+        b2=0.95,
+        eps=1e-8,
+        weight_decay=0.0,
+        warmup_pct=0.1,
+        n_steps=int(1e5),
+        div_factor=25,
+        final_div_factor=1e4,
+        lr_schedule="constant"
+):
     if lr_schedule == "cosine":
         lr = optax.cosine_onecycle_schedule(n_steps, lr, warmup_pct, div_factor, final_div_factor)
     elif lr_schedule == "constant":
         lr = optax.constant_schedule(lr)
 
-    return optax.adamw(lr, b1, b2, eps, weight_decay=weight_decay), lr
+    if optimizer == "adamw":
+        optimizer = optax.adamw(lr, b1, b2, eps, weight_decay=weight_decay)
+    elif optimizer == "sgd":
+        optimizer = optax.sgd(lr)
+
+    return optimizer, lr
 
 
 def gradient_step(variables, loss_params, opt_state, optimizer, loss_fn):

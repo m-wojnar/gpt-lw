@@ -1,0 +1,7 @@
+seq_len: 128
+embed_dim: 192
+ff_dim: 512
+num_heads: 8
+num_layers: 12
+drop_rate: 0.0
+dtype: "bfloat16"

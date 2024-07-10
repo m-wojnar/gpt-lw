@@ -16,7 +16,7 @@ from cfg_dataset.cfg import CFG
 from generate_cfg_dataset import EOT_TOKEN_CFG
 from generate_text_dataset import EOT_TOKEN_NL
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
-from gpt_lw.grad_utils import grad_norm_per_token
+from gpt_lw.grad_utils import grad_norm, grad_norm_per_token
 from gpt_lw.loss import get_weighted_loss
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_train_state, load_train_state, forward
 from gpt_lw.model import GPT, GPTConfig
@@ -32,6 +32,7 @@ def train(
         schedule: optax.Schedule,
         loss_weighting: str,
         batch_size: int,
+        gn_batch_size: int,
         n_steps: int,
         seed: int,
         save_freq: int,
@@ -93,13 +94,16 @@ def train(
     loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item())
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
-    grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
-    per_token_cce = jax.jit(eval_fn)
+    per_token_gn_fn = jax.jit(partial(grad_norm_per_token, loss_fn, gn_batch_size))
+    gn_fn = jax.jit(partial(grad_norm, mean_loss_fn(loss_fn)))
     step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
+    per_token_loss_fn = jax.jit(loss_fn)
+    per_token_cce_fn = jax.jit(eval_fn)
     loss_fn = jax.jit(mean_loss_fn(loss_fn))
     eval_fn = jax.jit(mean_loss_fn(eval_fn))
     train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
     val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len + 1))
+    gn_sample_fn = jax.jit(partial(sample_batch, train_dataset, gn_batch_size, config.seq_len + 1))
     gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, batch_size, method="gen")[0])
 
     # train loop
@@ -120,11 +124,11 @@ def train(
 
         if step % val_freq == 0:
             t0_val = time.time()
-            val_loss, val_cce, val_gn = 0.0, 0.0, 0.0
+            val_loss, val_cce, val_context_cce, val_mean_token_gn, val_global_gn = 0.0, 0.0, 0.0, 0.0, 0.0
 
-            token_gn_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
-            token_loss_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
-            token_cce_accum = jnp.zeros((1, config.seq_len), dtype=jnp.float32)
+            token_gn_accum = jnp.zeros((gn_batch_size, config.seq_len))
+            token_loss_accum = jnp.zeros((gn_batch_size, config.seq_len))
+            token_cce_accum = jnp.zeros((gn_batch_size, config.seq_len))
 
             for i in range(n_val_steps):
                 loss_key, eval_key, grad_key, val_batch_key, grad_batch_key, val_key = jax.random.split(val_key, 6)
@@ -132,19 +136,24 @@ def train(
                 xt, xtp1 = val_sample_fn(val_batch_key)
                 val_loss_t, _ = loss_fn(variables, loss_key, xt, xtp1)
                 val_cce_t, _ = eval_fn(variables, eval_key, xt, xtp1)
+                val_context_cce_t, _ = eval_fn(variables, eval_key, xt[:, config.seq_len // 2:], xtp1[:, config.seq_len // 2:])
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
+                val_context_cce += val_context_cce_t.item()
 
-                xt, xtp1 = train_sample_fn(grad_batch_key)
-                token_loss, grads = grad_norm_fn(variables, grad_key, xt, xtp1)
-                token_cce, _ = per_token_cce(variables, grad_key, xt, xtp1)
+                xt, xtp1 = gn_sample_fn(grad_batch_key)
+                grad_norms = per_token_gn_fn(variables, grad_key, xt, xtp1)
+                global_gn = gn_fn(variables, grad_key, xt, xtp1)
+                token_loss, _ = per_token_loss_fn(variables, grad_key, xt, xtp1)
+                token_cce, _ = per_token_cce_fn(variables, grad_key, xt, xtp1)
 
                 token_loss_accum += token_loss
-                token_gn_accum += grads
+                token_gn_accum += grad_norms
                 token_cce_accum += token_cce
+                val_mean_token_gn += grad_norms.mean().item()
+                val_global_gn += global_gn.item()
 
-                misc_metrics.append((xt, xtp1, token_loss, token_cce, grads, step))
-                val_gn += grads.mean().item()
+                misc_metrics.append((xt, xtp1, token_loss, token_cce, grad_norms, step))
 
             token_loss_accum /= n_val_steps
             token_gn_accum /= n_val_steps
@@ -153,13 +162,15 @@ def train(
             # log log-spaced points
             points = [0] + [2**p for p in range(math.floor(math.log2(token_loss_accum.shape[1])) + 1)]
             for p in points:
-                log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[0, p].item()
-                log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[0, p].item()
-                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[0, p].item()
+                log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[:, p].mean().item()
+                log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[:, p].mean().item()
+                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[:, p].mean().item()
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
-            log_dict["val/gn"] = val_gn / n_val_steps
+            log_dict["val/context_cce"] = val_context_cce / n_val_steps
+            log_dict["val/mean_token_gn"] = val_mean_token_gn / n_val_steps
+            log_dict["val/global_gn"] = val_global_gn / n_val_steps
 
             val_time = time.time() - t0_val
             log_dict["perf/val_time"] = val_time
@@ -192,7 +203,7 @@ if __name__ == "__main__":
     args.add_argument("--loss_weighting", type=str, default="unweighted")
     args = args.parse_args()
 
-    if not os.path.exists(f"runs/{args.run_name}"):  # run does not exist, parse input configs
+    if not os.path.exists(f"runs/{args.run_name}/checkpoints/last_variables.pkl"):  # run does not exist, parse input configs
         print(f"Starting new run in runs/{args.run_name}...")
         with open(args.train_config) as f:
             train_config = yaml.safe_load(f)
@@ -220,9 +231,9 @@ if __name__ == "__main__":
         optimizer, schedule = get_optimizer(**optimizer_config)
 
         # create dir structure
-        os.makedirs(f"runs/{args.run_name}/checkpoints")
-        os.makedirs(f"runs/{args.run_name}/configs")
-        os.makedirs(f"runs/{args.run_name}/analysis")
+        os.makedirs(f"runs/{args.run_name}/checkpoints", exist_ok=True)
+        os.makedirs(f"runs/{args.run_name}/configs", exist_ok=True)
+        os.makedirs(f"runs/{args.run_name}/analysis", exist_ok=True)
 
         # save configs
         with open(f"runs/{args.run_name}/configs/gpt.yaml", "w") as f:

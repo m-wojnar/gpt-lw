@@ -2,6 +2,7 @@ cfg_name: "cfg3b_half"
 train_dataset_path: "cfg_dataset/cfg3b_half_100000_train.txt"
 val_dataset_path: "cfg_dataset/cfg3b_half_100000_val.txt"
 batch_size: 64
+gn_batch_size: 16
 n_steps: 100000
 seed: 42
 save_freq: 5000

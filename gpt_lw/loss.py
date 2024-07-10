@@ -40,11 +40,16 @@ def get_weighted_loss(model, weighting, delim_token=-1):
         weight_fn = negexp_relpos
     elif os.path.exists(weighting): # passed through tensor
         weights = jnp.load(weighting)
+        *_, name = weighting.split("/")
         def tensor_abspos(x):
-            # relative_positions = compute_relative_positions(x, delim_token=delim_token)
-            # fake relative pos, just arange n_rows times
-            relative_positions = jnp.arange(x.shape[1]).reshape(1, -1).repeat(x.shape[0], axis=0)
-            return weights[relative_positions]
+            if 'rel' in name:
+                relative_positions = compute_relative_positions(x, delim_token=delim_token)
+                return weights[relative_positions]
+            elif 'abs' in name:
+                absolute_positions = jnp.arange(x.shape[1]).reshape(1, -1).repeat(x.shape[0], axis=0)
+                return weights[absolute_positions]
+            else:
+                raise ValueError(f"Invalid weighting name: {name}")
         weight_fn = tensor_abspos
 
     def weighted_nt(variables, key, xt, xtp1):
