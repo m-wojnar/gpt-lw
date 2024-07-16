@@ -26,7 +26,9 @@ def get_optimizer(
     elif lr_schedule == "constant":
         lr = optax.constant_schedule(lr)
 
-    if optimizer == "adamw":
+    if optimizer == "adam":
+        optimizer = optax.adam(lr, b1, b2, eps)
+    elif optimizer == "adamw":
         optimizer = optax.adamw(lr, b1, b2, eps, weight_decay=weight_decay)
     elif optimizer == "sgd":
         optimizer = optax.sgd(lr)
