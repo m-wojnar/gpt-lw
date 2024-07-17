@@ -136,10 +136,8 @@ def train(
                 xt, xtp1 = val_sample_fn(val_batch_key)
                 val_loss_t, _ = loss_fn(variables, loss_key, xt, xtp1)
                 val_cce_t, _ = eval_fn(variables, eval_key, xt, xtp1)
-                val_context_cce_t, _ = eval_fn(variables, eval_key, xt[:, config.seq_len // 2:], xtp1[:, config.seq_len // 2:])
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
-                val_context_cce += val_context_cce_t.item()
 
                 xt, xtp1 = gn_sample_fn(grad_batch_key)
                 grad_norms = per_token_gn_fn(variables, grad_key, xt, xtp1)
@@ -150,6 +148,7 @@ def train(
                 token_loss_accum += token_loss
                 token_gn_accum += grad_norms
                 token_cce_accum += token_cce
+                val_context_cce += token_cce[:, config.seq_len // 2:].mean().item()
                 val_mean_token_gn += grad_norms.mean().item()
                 val_global_gn += global_gn.item()
 
