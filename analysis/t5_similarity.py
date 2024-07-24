@@ -18,12 +18,12 @@ if __name__ == "__main__":
     batch_size = 64
     key = jax.random.PRNGKey(42)
 
-    model, variables = load_pretrained_model(f"../runs/{args.name}")
+    model, variables = load_pretrained_model(f"runs/{args.name}")
     seq_len = model.config.seq_len
     inputs = jnp.empty((batch_size, seq_len), dtype=int)
     cache = init_cache(model, inputs)
 
-    all_tokens, tokenizer = get_dataset("../text_dataset/val_wikipedia.npy", dataset_type="text")
+    all_tokens, tokenizer = get_dataset("text_dataset/val_wikipedia.npy", dataset_type="text")
     gen_fn = jax.jit(lambda key, context: forward(model, variables | {'cache': cache}, key, context, method="context_gen")[0])
     decode_fn = lambda tokens: [tokenizer.decode(t) for t in tokens]
     t5_model = SentenceTransformer("sentence-transformers/sentence-t5-large")
