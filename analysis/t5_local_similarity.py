@@ -43,4 +43,4 @@ if __name__ == "__main__":
         cosine_sim += t5_model.similarity(true_emb, gen_emb).diag().mean().item()
 
     cosine_sim /= n_steps
-    print(f"{args.name} T5 cosine similarity: {cosine_sim:.4f}")
+    print(f"{args.name} T5 local cosine similarity: {cosine_sim:.4f}")
