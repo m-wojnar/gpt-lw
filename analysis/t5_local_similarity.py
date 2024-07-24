@@ -26,7 +26,7 @@ if __name__ == "__main__":
     all_tokens, tokenizer = get_dataset("text_dataset/val_wikipedia.npy", dataset_type="text")
     gen_fn = jax.jit(lambda key, context: forward(model, variables | {'cache': cache}, key, context, method="context_gen")[0])
     decode_fn = lambda tokens: [tokenizer.decode(t) for t in tokens]
-    t5_model = SentenceTransformer("sentence-transformers/sentence-t5-large")
+    t5_model = SentenceTransformer("sentence-transformers/sentence-t5-base")
 
     sample_fn = jax.jit(partial(sample_batch, all_tokens, batch_size, seq_len + 1))
     n_steps = 2000
