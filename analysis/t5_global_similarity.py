@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 import jax
 import jax.numpy as jnp
 import numpy as np
-from tqdm import tqdm
+from tqdm import trange
 from sentence_transformers import SentenceTransformer
 
 from gpt_lw.data import get_dataset
@@ -27,9 +27,10 @@ if __name__ == "__main__":
     cache = init_cache(model, inputs)
 
     all_tokens, tokenizer = get_dataset("text_dataset/val_wikipedia.npy", dataset_type="text")
-    all_text = tokenizer.decode(all_tokens).split(EOT_TOKEN_NL)[1:]
-    all_text = [text for text in all_text if len(text) >= seq_len]
-    all_text = np.array(all_text)
+    delim_token = tokenizer.encode(EOT_TOKEN_NL)
+    all_tokens = jnp.split(all_tokens, jnp.where(all_tokens == delim_token)[0] + 1)[1:]
+    all_tokens = [t for t in all_tokens if len(t) >= seq_len]
+    all_text = np.array([tokenizer.decode(t) for t in all_tokens])
 
     gen_fn = jax.jit(lambda key, context: forward(model, variables | {'cache': cache}, key, context, method="context_gen")[0])
     decode_fn = lambda tokens: [tokenizer.decode(t) for t in tokens]
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     cosine_sim = 0.0
     n_steps = 2000
 
-    for _ in tqdm(range(n_steps)):
+    for _ in trange(n_steps):
         key, batch_key, seq_key, model_key = jax.random.split(key, 4)
         batch_idx = jax.random.randint(batch_key, (batch_size,), 0, len(all_text))
 
