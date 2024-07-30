@@ -107,8 +107,6 @@ class GPT(nn.Module):
 
         return Transformer(self.config)(x, pos, mask, training=training)
 
-    # NOTE: not adding any fancy logit wrappers (top_k, top_p, etc.) here since
-    # vocab size is probably too small for it to be relevant
     def gen(self, batch_size):
         def scan_fn(gpt, carry):
             prev_token, key = carry
@@ -122,3 +120,18 @@ class GPT(nn.Module):
         first_token = jnp.ones((batch_size, 1), dtype=int) * self.config.eot_token
         _, generated = scan(self, (first_token, self.make_rng('gpt')))
         return generated.squeeze()
+
+    def context_gen(self, context):
+        def scan_fn(gpt, carry):
+            prev_token, idx, key = carry
+            prev_token = jax.lax.select(idx < context.shape[1], context[:, idx][:, None], prev_token)
+            key, cat_key = jax.random.split(key)
+
+            logits = gpt(prev_token, training=False)
+            next_token = jax.random.categorical(cat_key, logits).astype(jnp.uint16)
+            return (next_token, idx + 1, key), next_token
+
+        scan = nn.scan(scan_fn, variable_broadcast='params', variable_carry='cache', out_axes=1, length=self.config.seq_len)
+        empty_token = jnp.empty((context.shape[0], 1), dtype=jnp.uint16)
+        _, generated = scan(self, (empty_token, 0, self.make_rng('gpt')))
+        return generated[:, context.shape[1]:].squeeze()
