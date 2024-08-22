@@ -1,4 +1,4 @@
-optimizer: "adam"
+optimizer: "adamw"
 lr: 0.00027
 b1: 0.9
 b2: 0.95
