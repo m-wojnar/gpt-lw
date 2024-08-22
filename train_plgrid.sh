@@ -16,4 +16,4 @@ export VENV_DIR="${BASE_DIR}/venv"
 module load Python/3.10.4
 export XLA_FLAGS=--xla_gpu_cuda_data_dir=$CUDA_ROOT
 
-./train.sh
+./train.sh "$@"
