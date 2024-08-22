@@ -27,7 +27,7 @@ def compute_relative_positions(tokens, delim_token):
     return relative_positions
 
 
-def get_weighted_loss(model, weighting, delim_token=-1):
+def get_weighted_loss(model, weighting, delim_token=-1, a=None, b=None):
     if weighting == "unweighted":
         def unweighted(x):
             return jnp.ones_like(x)
@@ -38,6 +38,14 @@ def get_weighted_loss(model, weighting, delim_token=-1):
             weights = (-jnp.exp(-relative_positions) + 1.0) * (27.0 / 26.0) + 1e-3
             return weights
         weight_fn = negexp_relpos
+    elif weighting == "reciprocal":
+        def reciprocal(x):
+            relative_positions = compute_relative_positions(x, delim_token=delim_token)
+            weights = 1 - 1 / (a * relative_positions + b)
+            weights = weights / weights.sum(axis=1, keepdims=True)
+            weights = model.config.seq_len * weights
+            return weights
+        weight_fn = reciprocal
     elif os.path.exists(weighting): # passed through tensor
         weights = jnp.load(weighting)
         *_, name = weighting.split("/")

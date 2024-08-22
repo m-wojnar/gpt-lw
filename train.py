@@ -12,14 +12,13 @@ import wandb
 import yaml
 from chex import Array
 
-from cfg_dataset.cfg import CFG
-from generate_cfg_dataset import EOT_TOKEN_CFG
 from generate_text_dataset import EOT_TOKEN_NL
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.grad_utils import grad_norm, grad_norm_per_token
 from gpt_lw.loss import get_weighted_loss
 from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_train_state, load_train_state, forward
 from gpt_lw.model import GPT, GPTConfig
+from gpt_lw.t5_similarity import t5_global_similarity, t5_local_similarity
 
 
 def train(
@@ -31,6 +30,8 @@ def train(
         optimizer: optax.GradientTransformation,
         schedule: optax.Schedule,
         loss_weighting: str,
+        loss_weighting_a: float,
+        loss_weighting_b: float,
         batch_size: int,
         gn_batch_size: int,
         n_steps: int,
@@ -91,7 +92,7 @@ def train(
             return loss.mean(), aux
         return _fn
 
-    loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item())
+    loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item(), a=loss_weighting_a, b=loss_weighting_b)
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
     per_token_gn_fn = jax.jit(partial(grad_norm_per_token, loss_fn, gn_batch_size))
@@ -191,15 +192,22 @@ def train(
             save_train_state(train_state, path=f"runs/{run_name}/checkpoints/last")
     save_train_state(train_state, path=f"runs/{run_name}/checkpoints/last")
 
+    wandb.log({
+        "val/t5_global_similarity": t5_global_similarity(run_name),
+        "val/t5_local_similarity": t5_local_similarity(run_name)
+    })
+
 
 if __name__ == "__main__":
     args = ArgumentParser()
     args.add_argument("--gpt_config", type=str, default="configs/gpt/debug.yaml")
     args.add_argument("--optimizer_config", type=str, default="configs/optimizer/debug.yaml")
-    args.add_argument("--train_config", type=str, default="configs/train/debug_nl.yaml")
+    args.add_argument("--train_config", type=str, default="configs/train/debug_txt.yaml")
     args.add_argument("--checkpoint_path", type=str, default=None) # manual override of auto last checkpoint
     args.add_argument("--run_name", type=str, default="debug")
-    args.add_argument("--loss_weighting", type=str, default="unweighted")
+    args.add_argument("--loss_weighting", type=str, default="reciprocal")
+    args.add_argument("--loss_weighting_a", type=float, default=1.1364604145422126)
+    args.add_argument("--loss_weighting_b", type=float, default=3.9379786151261116)
     args = args.parse_args()
 
     if not os.path.exists(f"runs/{args.run_name}/checkpoints/last_variables.pkl"):  # run does not exist, parse input configs
@@ -273,6 +281,8 @@ if __name__ == "__main__":
             optimizer=optimizer,
             schedule=schedule,
             loss_weighting=args.loss_weighting,
+            loss_weighting_a=args.loss_weighting_a,
+            loss_weighting_b=args.loss_weighting_b,
             checkpoint_path=args.checkpoint_path,
             **train_config
         )
