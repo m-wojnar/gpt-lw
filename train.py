@@ -193,8 +193,8 @@ def train(
     save_train_state(train_state, path=f"runs/{run_name}/checkpoints/last")
 
     wandb.log({
-        "val/t5_global_similarity": t5_global_similarity(run_name),
-        "val/t5_local_similarity": t5_local_similarity(run_name)
+        "val/t5_global_similarity": t5_global_similarity(run_name, n_val_steps),
+        "val/t5_local_similarity": t5_local_similarity(run_name, n_val_steps)
     })
 
 

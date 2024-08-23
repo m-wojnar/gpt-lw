@@ -14,7 +14,7 @@ from gpt_lw.model_utils import load_pretrained_model, forward, init_cache
 EOT_TOKEN_NL = "<|endoftext|>"
 
 
-def t5_global_similarity(name):
+def t5_global_similarity(name, n_steps=2000):
     batch_size = 64
     key = jax.random.PRNGKey(42)
 
@@ -34,7 +34,6 @@ def t5_global_similarity(name):
     t5_model = SentenceTransformer("sentence-transformers/sentence-t5-base")
 
     cosine_sim = 0.0
-    n_steps = 2000
 
     for _ in trange(n_steps):
         key, batch_key, seq_key, model_key = jax.random.split(key, 4)
@@ -58,7 +57,7 @@ def t5_global_similarity(name):
     return cosine_sim / n_steps
 
 
-def t5_local_similarity(name):
+def t5_local_similarity(name, n_steps=2000):
     batch_size = 64
     key = jax.random.PRNGKey(42)
 
@@ -73,7 +72,6 @@ def t5_local_similarity(name):
     t5_model = SentenceTransformer("sentence-transformers/sentence-t5-base")
 
     sample_fn = jax.jit(partial(sample_batch, all_tokens, batch_size, seq_len + 1))
-    n_steps = 2000
     cosine_sim = 0.0
 
     for _ in trange(n_steps):
