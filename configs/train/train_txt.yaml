@@ -6,7 +6,7 @@ n_steps: 100000
 seed: 42
 save_freq: 100000
 save_intermediate: false
-val_freq: 49999
+val_freq: 99000
 n_val_steps: 100
 log_freq: 1000
 logging: "wandb"
