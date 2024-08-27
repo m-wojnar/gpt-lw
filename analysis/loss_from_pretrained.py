@@ -57,7 +57,7 @@ if __name__ == "__main__":
             model, variables = load_pretrained_model(f"runs/{name}")
 
             loss_fn = get_weighted_loss(model, "unweighted")
-            grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn, gn_batch_size))
+            grad_norm_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
             model_fn = jax.jit(lambda x, k: forward(model, variables, k, x)[0])
 
         sample_fn = jax.jit(partial(sample_batch, all_tokens, batch_size, seq_len + 1))

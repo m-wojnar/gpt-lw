@@ -9,14 +9,16 @@ def grad_tree_to_grad_norm(grads, sum_axis):
     return grad_norms
 
 
-# NOTE: Computes the grad norm for each token in the input sequence sequentially
-def grad_norm_per_token(loss_fn, slice_size, variables, key, xt, xtp1):
+# NOTE: Computes mean grad norm for each token in the input sequence
+def grad_norm_per_token(loss_fn, variables, key, xt, xtp1):
     params = variables['params']
     state = {k: v for k, v in variables.items() if k != 'params'}
 
-    jacobian_fn = jax.jacrev(lambda p, i: jax.lax.dynamic_slice(loss_fn({'params': p, **state}, key, xt, xtp1)[0], (0, i), (slice_size, 1)))
-    _, grads = jax.lax.scan(lambda _, i: (None, jacobian_fn(params, i)), None, jnp.arange(xt.shape[1]))
-    grad_norms = grad_tree_to_grad_norm(grads, sum_axis=2)
+    grads = jax.vmap(
+        jax.grad(lambda p, i: loss_fn({'params': p, **state}, key, xt, xtp1)[0][:, i].mean()),
+        in_axes=(None, 0)
+    )(params, jnp.arange(xt.shape[1]))
+    grad_norms = grad_tree_to_grad_norm(grads, sum_axis=1)
 
     return grad_norms
 

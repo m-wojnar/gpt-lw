@@ -94,7 +94,7 @@ def train(
     loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item())
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
-    per_token_gn_fn = jax.jit(partial(grad_norm_per_token, loss_fn, gn_batch_size))
+    per_token_gn_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
     gn_fn = jax.jit(partial(grad_norm, mean_loss_fn(loss_fn)))
     step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
     per_token_loss_fn = jax.jit(loss_fn)
@@ -109,7 +109,7 @@ def train(
     # train loop
     for step in range(init_step, n_steps):
         t0_train = time.time()
-        log_dict = {'step': step, 'tokens': step * batch_size * config.seq_len}
+        log_dict = {'step': step, 'tokens': step * batch_size * config.seq_len, 'bs': batch_size}
         step_key, batch_key, train_key = jax.random.split(train_key, 3)
         xt, xtp1 = train_sample_fn(batch_key)
 
