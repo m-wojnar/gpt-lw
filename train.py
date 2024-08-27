@@ -32,7 +32,6 @@ def train(
         schedule: optax.Schedule,
         loss_weighting: str,
         batch_size: int,
-        gn_batch_size: int,
         n_steps: int,
         seed: int,
         save_freq: int,
@@ -84,26 +83,32 @@ def train(
     n_params = sum(x.size for x in jax.tree.leaves(variables['params']))
     print(f"Model has {n_params} parameters")
 
+    # log log-spaced points
+    points = [0] + [2 ** p for p in range(math.floor(math.log2(model.config.seq_len)) + 1)]
+    points = jnp.asarray(points)
+
     # compiled functions
-    def mean_loss_fn(fn):
+    def mean_loss_fn(fn, axis=None, points=None):
         def _fn(*args):
             loss, aux = fn(*args)
-            return loss.mean(), aux
+            if points is not None:
+                loss = loss[:, points]
+            return loss.mean(axis=axis), aux
         return _fn
 
     loss_fn = get_weighted_loss(model, loss_weighting, delim_token=tokenizer.encode(EOT_TOKEN_NL).item())
     eval_fn = get_weighted_loss(model, "unweighted")  # CCE/compression
 
-    per_token_gn_fn = jax.jit(partial(grad_norm_per_token, loss_fn))
+    per_token_gn_fn = jax.jit(partial(grad_norm_per_token, loss_fn, points))
     gn_fn = jax.jit(partial(grad_norm, mean_loss_fn(loss_fn)))
     step_fn = jax.jit(partial(gradient_step, loss_fn=mean_loss_fn(loss_fn), optimizer=optimizer))
-    per_token_loss_fn = jax.jit(loss_fn)
-    per_token_cce_fn = jax.jit(eval_fn)
+    per_token_loss_fn = jax.jit(mean_loss_fn(loss_fn, axis=0, points=points))
+    per_token_cce_fn = jax.jit(mean_loss_fn(eval_fn, axis=0, points=points))
     loss_fn = jax.jit(mean_loss_fn(loss_fn))
     eval_fn = jax.jit(mean_loss_fn(eval_fn))
     train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
     val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len + 1))
-    gn_sample_fn = jax.jit(partial(sample_batch, train_dataset, gn_batch_size, config.seq_len + 1))
+    gn_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
     gen_fn = jax.jit(lambda variables, key: forward(model, variables | {'cache': cache}, key, batch_size, method="gen")[0])
 
     # train loop
@@ -126,9 +131,9 @@ def train(
             t0_val = time.time()
             val_loss, val_cce, val_context_cce, val_mean_token_gn, val_global_gn = 0.0, 0.0, 0.0, 0.0, 0.0
 
-            token_gn_accum = jnp.zeros((gn_batch_size, config.seq_len))
-            token_loss_accum = jnp.zeros((gn_batch_size, config.seq_len))
-            token_cce_accum = jnp.zeros((gn_batch_size, config.seq_len))
+            token_gn_accum = jnp.zeros(len(points))
+            token_loss_accum = jnp.zeros(len(points))
+            token_cce_accum = jnp.zeros(len(points))
 
             for i in range(n_val_steps):
                 loss_key, eval_key, grad_key, val_batch_key, grad_batch_key, val_key = jax.random.split(val_key, 6)
@@ -158,12 +163,10 @@ def train(
             token_gn_accum /= n_val_steps
             token_cce_accum /= n_val_steps
 
-            # log log-spaced points
-            points = [0] + [2**p for p in range(math.floor(math.log2(token_loss_accum.shape[1])) + 1)]
-            for p in points:
-                log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[:, p].mean().item()
-                log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[:, p].mean().item()
-                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[:, p].mean().item()
+            for i, p in enumerate(points):
+                log_dict[f"val_loss(pos)/token_loss_{p}"] = token_loss_accum[i].item()
+                log_dict[f"val_cce(pos)/token_cce_{p}"] = token_cce_accum[i].item()
+                log_dict[f"val_grad(pos)/token_gn_{p}"] = token_gn_accum[i].item()
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
