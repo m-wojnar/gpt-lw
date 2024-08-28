@@ -153,7 +153,7 @@ def train(
                 token_loss_accum += token_loss
                 token_gn_accum += grad_norms
                 token_cce_accum += token_cce
-                val_context_cce += token_cce[:, config.seq_len // 2:].mean().item()
+                val_context_cce += token_cce[config.seq_len // 2:].mean().item()
                 val_mean_token_gn += grad_norms.mean().item()
                 val_global_gn += global_gn.item()
 
