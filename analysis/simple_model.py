@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 def loss_fn(params, X, Y, i):
     logits = X @ params
-    return optax.softmax_cross_entropy_with_integer_labels(logits[None], Y).mean()
+    return optax.softmax_cross_entropy(logits[None], Y).mean()
 
 
 def grad_norm(params, X, Y):
@@ -55,6 +55,7 @@ if __name__ == '__main__':
     n_steps = 2500
     n_bs = 16
 
+    np.random.seed(42)
     key = jax.random.PRNGKey(42)
     params = create_trained_model(n_cat, n_entropy_points)
 
