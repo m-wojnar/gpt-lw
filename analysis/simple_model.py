@@ -9,26 +9,25 @@ from scipy.optimize import minimize
 from tqdm import tqdm
 
 
-def loss_fn(params, X, Y, i):
+def loss_fn(params, X, Y):
     logits = X @ params
-    return optax.softmax_cross_entropy(logits[None], Y).mean()
+    return optax.softmax_cross_entropy_with_integer_labels(logits, Y).mean()
 
 
 def grad_norm(params, X, Y):
-    grads = jax.vmap(
-        jax.grad(loss_fn), in_axes=(None, 0, 0, 0)
-    )(params, X, Y, jnp.arange(len(X)))
-    return jnp.sqrt((grads ** 2).mean(axis=0).sum(axis=1))
+    grads = jax.grad(loss_fn)(params, X, Y)
+    return jnp.linalg.norm(grads)
 
 
-def sample_batch(params, key, bs, n_cat, n_entropy_points):
-    x_key, y_key = jax.random.split(key, 2)
-    X = jax.random.categorical(x_key, jnp.zeros((bs, n_entropy_points)), axis=-1)
-    X = jax.nn.one_hot(X, num_classes=n_entropy_points)
-    Y = X @ params
-    Y = jax.random.categorical(y_key, Y, axis=-1)
-    Y = jax.nn.one_hot(Y, num_classes=n_cat, dtype=int)
-    return X, Y
+@partial(jax.jit, static_argnames=('bs', 'n_entropy_points'))
+def batched_grad_norm(params, logits, i, bs, n_entropy_points, keys):
+    X = jnp.zeros((bs, n_entropy_points)).at[:, i].set(1)
+
+    def _fn(key):
+        Y = jax.random.categorical(key, logits, shape=(bs,))
+        return grad_norm(params, X, Y)
+
+    return jax.vmap(_fn)(keys)
 
 
 def create_trained_model(n_cat, n_entropy_points):
@@ -50,10 +49,12 @@ def create_trained_model(n_cat, n_entropy_points):
 
 
 if __name__ == '__main__':
-    n_cat = 20
-    n_entropy_points = 20
-    n_steps = 2500
-    n_bs = 16
+    plt.figure(figsize=(8, 3), dpi=300)
+
+    n_cat = 5
+    n_entropy_points = 40
+    n_samples = 10000
+    n_bs = 14
 
     np.random.seed(42)
     key = jax.random.PRNGKey(42)
@@ -64,16 +65,13 @@ if __name__ == '__main__':
     results = []
 
     for bs in tqdm(batch_sizes):
-        bs_results = []
-        sample_fn = jax.jit(partial(sample_batch, bs=bs, n_cat=n_cat, n_entropy_points=n_entropy_points))
-        grad_fn = jax.jit(grad_norm)
+        bs_results = jnp.zeros(n_entropy_points)
 
-        for step in range(n_steps):
-            key, subkey = jax.random.split(key)
-            X, Y = sample_fn(params, subkey)
-            bs_results.append(grad_fn(params, X, Y))
+        for i, logits in enumerate(params):
+            e_results = batched_grad_norm(params, logits, i, bs, n_entropy_points, jax.random.split(key, max(20, n_samples // bs)))
+            bs_results = bs_results.at[i].set(e_results.mean())
 
-        results.append(np.asarray(bs_results).mean(axis=0))
+        results.append(bs_results)
 
     plt.imshow(results)
     plt.yticks(range(n_bs), batch_sizes)
