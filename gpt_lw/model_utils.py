@@ -1,5 +1,6 @@
 import os
 import jax
+import jax.numpy as jnp
 import lz4.frame
 import optax
 import yaml
@@ -65,6 +66,13 @@ def init_cache(model, *x):
 def forward(model, variables, key, *x, method=None):
     gpt_key, dropout_key = jax.random.split(key)
     return model.apply(variables, *x, rngs={'gpt': gpt_key, 'dropout': dropout_key}, mutable=list(set(variables) - {'params'}), method=method)
+
+
+def model_entropy(model, variables, key, xt):
+    logits, _ = forward(model, variables, key, xt)
+    probs = jax.nn.softmax(logits, axis=-1)
+    log_probs = jax.nn.log_softmax(logits, axis=-1)
+    return -jnp.sum(probs * log_probs, axis=-1).mean()
 
 
 def save_variables(*variables, path):

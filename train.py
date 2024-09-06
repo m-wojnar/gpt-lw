@@ -18,7 +18,7 @@ from generate_text_dataset import EOT_TOKEN_NL
 from gpt_lw.data import Tokenizer, get_dataset, sample_batch
 from gpt_lw.grad_utils import grad_norm, grad_norm_per_token
 from gpt_lw.loss import get_weighted_loss
-from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_train_state, load_train_state, forward
+from gpt_lw.model_utils import get_optimizer, init, init_cache, gradient_step, save_train_state, load_train_state, forward, model_entropy
 from gpt_lw.model import GPT, GPTConfig
 
 
@@ -101,6 +101,7 @@ def train(
     per_token_cce_fn = jax.jit(eval_fn)
     loss_fn = jax.jit(mean_loss_fn(loss_fn))
     eval_fn = jax.jit(mean_loss_fn(eval_fn))
+    entropy_fn = jax.jit(partial(model_entropy, model))
     train_sample_fn = jax.jit(partial(sample_batch, train_dataset, batch_size, config.seq_len + 1))
     val_sample_fn = jax.jit(partial(sample_batch, val_dataset, batch_size, config.seq_len + 1))
     gn_sample_fn = jax.jit(partial(sample_batch, train_dataset, gn_batch_size, config.seq_len + 1))
@@ -124,7 +125,7 @@ def train(
 
         if step % val_freq == 0:
             t0_val = time.time()
-            val_loss, val_cce, val_context_cce, val_mean_token_gn, val_global_gn = 0.0, 0.0, 0.0, 0.0, 0.0
+            val_loss, val_cce, val_context_cce, val_mean_token_gn, val_global_gn, val_entropy = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
             token_gn_accum = jnp.zeros((gn_batch_size, config.seq_len))
             token_loss_accum = jnp.zeros((gn_batch_size, config.seq_len))
@@ -136,8 +137,10 @@ def train(
                 xt, xtp1 = val_sample_fn(val_batch_key)
                 val_loss_t, _ = loss_fn(variables, loss_key, xt, xtp1)
                 val_cce_t, _ = eval_fn(variables, eval_key, xt, xtp1)
+                val_entropy_t = entropy_fn(variables, val_key, xt)
                 val_loss += val_loss_t.item()
                 val_cce += val_cce_t.item()
+                val_entropy += val_entropy_t.item()
 
                 xt, xtp1 = gn_sample_fn(grad_batch_key)
                 grad_norms = per_token_gn_fn(variables, grad_key, xt, xtp1)
@@ -167,6 +170,7 @@ def train(
 
             log_dict["val/loss"] = val_loss / n_val_steps
             log_dict["val/cce"] = val_cce / n_val_steps
+            log_dict["val/entropy"] = val_entropy / n_val_steps
             log_dict["val/context_cce"] = val_context_cce / n_val_steps
             log_dict["val/mean_token_gn"] = val_mean_token_gn / n_val_steps
             log_dict["val/global_gn"] = val_global_gn / n_val_steps
