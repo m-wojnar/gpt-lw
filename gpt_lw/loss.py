@@ -38,6 +38,14 @@ def get_weighted_loss(model, weighting, delim_token=-1):
             weights = (-jnp.exp(-relative_positions) + 1.0) * (27.0 / 26.0) + 1e-3
             return weights
         weight_fn = negexp_relpos
+    elif weighting == "variance":
+        def variance(logits, key):
+            idx = jax.random.categorical(key, logits)
+            probs = jax.nn.softmax(logits, axis=-1)
+            probs = jnp.take(probs, idx)
+            probs = probs * (1 - probs)
+            return probs
+        weight_fn = variance
     elif os.path.exists(weighting): # passed through tensor
         weights = jnp.load(weighting)
         *_, name = weighting.split("/")
@@ -53,13 +61,19 @@ def get_weighted_loss(model, weighting, delim_token=-1):
         weight_fn = tensor_abspos
 
     def weighted_nt(variables, key, xt, xtp1):
-        logits, state = forward(model, variables, key, xt)
+        forward_key, weight_key = jax.random.split(key)
+
+        logits, state = forward(model, variables, forward_key, xt)
         token_loss = optax.losses.softmax_cross_entropy_with_integer_labels(logits, xtp1)
 
-        weights = weight_fn(xt)
-        weights *= xt.shape[1] / weights.sum(axis=1, keepdims=True)
+        if weighting == "variance":
+            weights = weight_fn(logits, weight_key)
+        else:
+            weights = weight_fn(xt)
 
+        weights *= xt.shape[1] / weights.sum(axis=1, keepdims=True)
         weighted_loss = token_loss * weights
+
         return weighted_loss, state
 
     return weighted_nt

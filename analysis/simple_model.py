@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
         results.append(bs_results)
 
-    plt.imshow(results)
+    plt.imshow(results, cmap='gnuplot2')
     plt.yticks(range(n_bs), batch_sizes)
     plt.xticks(range(n_entropy_points), [f'{e:.2f}' for e in entropy], rotation=90)
     plt.ylabel('Batch size')
